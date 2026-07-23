@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Markdown 阅读器</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
+</head>
+<body>
+    <header>
+        <h1>Markdown 阅读器</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/reader.html" class="active">Markdown</a>
+            <a href="/files/md/">MD 文件</a>
+            <a href="/files/">文件下载</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <div id="reader-app">
+            <div id="file-list">
+                <h2>选择 Markdown 文件</h2>
+                <div id="md-file-list"></div>
+                <p id="file-list-empty" style="display:none;color:#999;">暂无 Markdown 文件</p>
+            </div>
+            <div id="reading-view" style="display:none">
+                <div id="reader-toolbar">
+                    <a href="/reader.html" class="btn" id="btn-back">← 文件列表</a>
+                    <span id="reader-filename"></span>
+                </div>
+                <div id="reader-content"></div>
+            </div>
+            <div id="reader-loading" style="display:none">
+                <p>加载中...</p>
+            </div>
+            <div id="reader-error" style="display:none">
+                <p id="reader-error-msg"></p>
+                <a href="/reader.html" class="btn">← 返回文件列表</a>
+            </div>
+        </div>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+    <script src="/js/marked.min.js"></script>
+    <script src="/js/highlight.min.js"></script>
+    <script>
+(function () {
+    var mdDir = '/files/md/';
+    var fileListEl = document.getElementById('file-list');
+    var readingViewEl = document.getElementById('reading-view');
+    var loadingEl = document.getElementById('reader-loading');
+    var errorEl = document.getElementById('reader-error');
+    var errorMsgEl = document.getElementById('reader-error-msg');
+    var contentEl = document.getElementById('reader-content');
+    var filenameEl = document.getElementById('reader-filename');
+    var fileListContainer = document.getElementById('md-file-list');
+    var emptyEl = document.getElementById('file-list-empty');
+
+    function show(el) { if (el) el.style.display = ''; }
+    function hide(el) { if (el) el.style.display = 'none'; }
+
+    function getQueryParam(name) {
+        var m = location.search.match(new RegExp('[?&]' + name + '=([^&]*)'));
+        return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    function getFileName(path) {
+        var parts = path.replace(/\\/g, '/').split('/');
+        return parts[parts.length - 1] || path;
+    }
+
+    // --- File listing ---
+    function loadFileList() {
+        show(fileListEl);
+        hide(readingViewEl);
+        hide(loadingEl);
+        hide(errorEl);
+        fileListContainer.innerHTML = '<p style="color:#999;">正在扫描文件...</p>';
+
+        fetch(mdDir)
+            .then(function (r) {
+                if (!r.ok) throw new Error('无法访问目录 (HTTP ' + r.status + ')');
+                return r.text();
+            })
+            .then(function (html) {
+                var parser = new DOMParser();
+                var doc = parser.parseFromString(html, 'text/html');
+                var links = doc.querySelectorAll('pre a[href]');
+                var mdFiles = [];
+                links.forEach(function (a) {
+                    var href = a.getAttribute('href');
+                    if (/\.md$/i.test(href) && href !== '../') {
+                        mdFiles.push({ href: href, name: a.textContent || href });
+                    }
+                });
+                if (mdFiles.length === 0) {
+                    show(emptyEl);
+                    fileListContainer.innerHTML = '';
+                    return;
+                }
+                hide(emptyEl);
+                var ul = document.createElement('ul');
+                ul.className = 'md-file-items';
+                mdFiles.forEach(function (f) {
+                    var li = document.createElement('li');
+                    var link = document.createElement('a');
+                    link.href = '/reader.html?path=' + encodeURIComponent(mdDir.replace(/^\/+/, '') + f.href.replace(/^\/+/, ''));
+                    link.textContent = f.name;
+                    link.className = 'md-file-link';
+                    li.appendChild(link);
+                    ul.appendChild(li);
+                });
+                fileListContainer.innerHTML = '';
+                fileListContainer.appendChild(ul);
+            })
+            .catch(function (err) {
+                fileListContainer.innerHTML = '<p style="color:#c00;">加载文件列表失败: ' + err.message + '</p>';
+            });
+    }
+
+    // --- Markdown rendering ---
+    function renderMarkdown(path) {
+        hide(fileListEl);
+        hide(errorEl);
+        show(loadingEl);
+
+        var fetchPath = '/' + path.replace(/^\/+/, '');
+
+        fetch(fetchPath)
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status + (r.status === 404 ? ' (文件未找到)' : ''));
+                return r.text();
+            })
+            .then(function (mdText) {
+                hide(loadingEl);
+                show(readingViewEl);
+                filenameEl.textContent = getFileName(path);
+
+                marked.setOptions({
+                    highlight: function (code, lang) {
+                        if (lang && hljs.getLanguage(lang)) {
+                            try { return hljs.highlight(code, { language: lang }).value; } catch (e) {}
+                        }
+                        try { return hljs.highlightAuto(code).value; } catch (e) {}
+                        return code;
+                    },
+                    langPrefix: 'hljs language-'
+                });
+
+                contentEl.innerHTML = marked.parse(mdText);
+                contentEl.querySelectorAll('pre code').forEach(function (block) {
+                    hljs.highlightElement(block);
+                });
+            })
+            .catch(function (err) {
+                hide(loadingEl);
+                show(errorEl);
+                errorMsgEl.textContent = '加载文件失败: ' + err.message;
+            });
+    }
+
+    // --- Init ---
+    var path = getQueryParam('path');
+    if (path) {
+        renderMarkdown(path);
+    } else {
+        loadFileList();
+    }
+})();
+    </script>
+</body>
+</html>
