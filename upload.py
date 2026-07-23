@@ -45,6 +45,38 @@ def list_subdirs(base):
 def render_page(message=None, error=None):
     return render_template_string(UPLOAD_FORM, message=message, error=error)
 
+# ===== 文件浏览 API =====
+
+@app.route("/api/files")
+def api_list_files():
+    path = request.args.get("path", "").strip().strip("/")
+    target_dir = UPLOAD_DIR
+    if path:
+        target_dir = safe_join(UPLOAD_DIR, path)
+        if not target_dir:
+            return jsonify({"error": "invalid path"}), 400
+
+    try:
+        names = sorted(os.listdir(target_dir))
+    except Exception:
+        return jsonify({"error": "cannot list directory"}), 500
+
+    entries = []
+    for name in names:
+        full = os.path.join(target_dir, name)
+        try:
+            st = os.stat(full)
+            is_dir = os.path.isdir(full)
+            entries.append({
+                "name": name,
+                "type": "dir" if is_dir else "file",
+                "size": st.st_size if not is_dir else 0,
+                "mtime": int(st.st_mtime)
+            })
+        except OSError:
+            pass
+    return jsonify({"entries": entries, "path": path})
+
 # ===== API =====
 
 @app.route("/upload/api/dirs")

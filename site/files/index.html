@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文件浏览 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/reader.html">Markdown</a>
+            <a href="/upload">上传文件</a>
+            <a href="/info.html">关于</a>
+            <a href="/files/" class="active">文件下载</a>
+        </nav>
+    </header>
+    <main>
+        <section class="fb-panel">
+            <div class="fb-toolbar">
+                <span class="fb-path" id="fb-path"></span>
+                <span class="fb-count" id="fb-count"></span>
+            </div>
+            <div id="fb-error" class="fb-error" style="display:none"></div>
+            <div id="fb-loading" class="fb-loading">加载中...</div>
+            <table class="fb-table" id="fb-table" style="display:none">
+                <thead>
+                    <tr>
+                        <th class="fb-col-icon"></th>
+                        <th class="fb-col-name">名称</th>
+                        <th class="fb-col-size">大小</th>
+                        <th class="fb-col-date">修改时间</th>
+                    </tr>
+                </thead>
+                <tbody id="fb-tbody"></tbody>
+            </table>
+            <div id="fb-empty" class="fb-empty" style="display:none">此目录为空</div>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+    <script>
+(function () {
+    var tbody = document.getElementById('fb-tbody');
+    var table = document.getElementById('fb-table');
+    var loading = document.getElementById('fb-loading');
+    var error = document.getElementById('fb-error');
+    var empty = document.getElementById('fb-empty');
+    var pathEl = document.getElementById('fb-path');
+    var countEl = document.getElementById('fb-count');
+
+    function getPath() {
+        var hash = window.location.hash.replace(/^#\/*/, '');
+        return hash;
+    }
+
+    function humanSize(bytes) {
+        if (bytes === 0) return '-';
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        var i = 0;
+        var size = bytes;
+        while (size >= 1024 && i < units.length - 1) {
+            size /= 1024;
+            i++;
+        }
+        return size.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+    }
+
+    function fmtDate(ts) {
+        var d = new Date(ts * 1000);
+        var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
+        return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+            + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }
+
+    function renderBreadcrumb(path) {
+        var parts = path ? path.split('/') : [];
+        var html = '<a href="#/" class="fb-bread-home"><i class="fas fa-home"></i> files</a>';
+        var acc = '';
+        parts.forEach(function (p, i) {
+            if (!p) return;
+            acc += (acc ? '/' : '') + p;
+            html += '<span class="fb-bread-sep">/</span>';
+            if (i === parts.length - 1) {
+                html += '<span class="fb-bread-current">' + escHtml(p) + '</span>';
+            } else {
+                html += '<a href="#/' + acc + '" class="fb-bread-link">' + escHtml(p) + '</a>';
+            }
+        });
+        return html;
+    }
+
+    function escHtml(s) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(s));
+        return div.innerHTML;
+    }
+
+    function getIconHtml(name, type) {
+        if (type === 'dir') {
+            return '<i class="fas fa-folder" style="color:#e67e22"></i>';
+        }
+        var ext = name.split('.').pop().toLowerCase();
+        var iconMap = {
+            pdf: 'fa-file-pdf', zip: 'fa-file-archive', tar: 'fa-file-archive',
+            gz: 'fa-file-archive', tgz: 'fa-file-archive', rar: 'fa-file-archive',
+            '7z': 'fa-file-archive', deb: 'fa-file-archive',
+            png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image',
+            gif: 'fa-file-image', svg: 'fa-file-image',
+            md: 'fa-file-lines', txt: 'fa-file-lines',
+            json: 'fa-file-code', bin: 'fa-file-binary',
+            iso: 'fa-file', html: 'fa-file-code', htm: 'fa-file-code',
+            py: 'fa-file-code', js: 'fa-file-code', css: 'fa-file-code'
+        };
+        var icon = iconMap[ext] || 'fa-file';
+        return '<i class="fas ' + icon + '" style="color:#7f8c8d"></i>';
+    }
+
+    function buildRow(entry, path) {
+        var tr = document.createElement('tr');
+        tr.className = entry.type === 'dir' ? 'fb-row-dir' : 'fb-row-file';
+
+        var iconTd = document.createElement('td');
+        iconTd.className = 'fb-col-icon';
+        iconTd.innerHTML = getIconHtml(entry.name, entry.type);
+        tr.appendChild(iconTd);
+
+        var nameTd = document.createElement('td');
+        nameTd.className = 'fb-col-name';
+        if (entry.type === 'dir') {
+            var childPath = path ? path + '/' + entry.name : entry.name;
+            var link = document.createElement('a');
+            link.href = '#/' + childPath;
+            link.className = 'fb-link fb-link-dir';
+            link.textContent = entry.name;
+            nameTd.appendChild(link);
+        } else {
+            var filePath = '/files/' + (path ? path + '/' + entry.name : entry.name);
+            var link = document.createElement('a');
+            link.href = filePath;
+            link.className = 'fb-link fb-link-file';
+            link.target = '_blank';
+            link.textContent = entry.name;
+            nameTd.appendChild(link);
+        }
+        tr.appendChild(nameTd);
+
+        var sizeTd = document.createElement('td');
+        sizeTd.className = 'fb-col-size';
+        sizeTd.textContent = entry.type === 'dir' ? '-' : humanSize(entry.size);
+        tr.appendChild(sizeTd);
+
+        var dateTd = document.createElement('td');
+        dateTd.className = 'fb-col-date';
+        dateTd.textContent = fmtDate(entry.mtime);
+        tr.appendChild(dateTd);
+
+        return tr;
+    }
+
+    function loadDir(path) {
+        loading.style.display = '';
+        table.style.display = 'none';
+        empty.style.display = 'none';
+        error.style.display = 'none';
+        tbody.innerHTML = '';
+
+        var url = '/api/files' + (path ? '?path=' + encodeURIComponent(path) : '');
+        fetch(url)
+            .then(function (r) {
+                if (!r.ok) throw new Error('请求失败 (HTTP ' + r.status + ')');
+                return r.json();
+            })
+            .then(function (data) {
+                loading.style.display = 'none';
+                var entries = data.entries;
+                if (!entries || entries.length === 0) {
+                    empty.style.display = '';
+                    pathEl.innerHTML = renderBreadcrumb(path);
+                    countEl.textContent = '0 项';
+                    return;
+                }
+
+                var dirs = entries.filter(function (e) { return e.type === 'dir'; });
+                var files = entries.filter(function (e) { return e.type === 'file'; });
+
+                dirs.forEach(function (d) {
+                    tbody.appendChild(buildRow(d, path));
+                });
+                files.forEach(function (f) {
+                    tbody.appendChild(buildRow(f, path));
+                });
+
+                table.style.display = '';
+                pathEl.innerHTML = renderBreadcrumb(path);
+                countEl.textContent = entries.length + ' 项';
+            })
+            .catch(function (err) {
+                loading.style.display = 'none';
+                error.style.display = '';
+                error.textContent = '加载失败: ' + err.message;
+                pathEl.innerHTML = renderBreadcrumb(path);
+                countEl.textContent = '';
+            });
+    }
+
+    function onHashChange() {
+        loadDir(getPath());
+    }
+
+    window.addEventListener('hashchange', onHashChange);
+    if (!window.location.hash) {
+        window.location.hash = '/';
+    } else {
+        onHashChange();
+    }
+})();
+    </script>
+</body>
+</html>
