@@ -130,7 +130,7 @@ UPLOAD_FORM = """
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>上传文件</title>
+    <title>文件上传</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
@@ -145,7 +145,7 @@ UPLOAD_FORM = """
     </header>
     <main>
         <section class="content upload-panel">
-            <h2>上传文件</h2>
+            <h2>文件上传</h2>
             <form method="post" enctype="multipart/form-data" action="/upload" id="upload-form">
                 <div class="form-row">
                     <label for="dir-select">目标目录</label>
@@ -282,7 +282,7 @@ def upload():
 
     if subdir:
         if is_blocked(subdir):
-            return render_page(error="该目录不允许上传文件"), 403
+            return render_page(error="该目录不允许文件上传"), 403
         target_dir = safe_join(UPLOAD_DIR, subdir)
         if not target_dir:
             return render_page(error="无效的目录路径"), 400
