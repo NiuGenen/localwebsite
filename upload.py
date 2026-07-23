@@ -52,8 +52,9 @@ def api_list_files():
     path = request.args.get("path", "").strip().strip("/")
     target_dir = UPLOAD_DIR
     if path:
-        target_dir = safe_join(UPLOAD_DIR, path)
-        if not target_dir:
+        joined = os.path.join(UPLOAD_DIR, path)
+        target_dir = os.path.normpath(joined)
+        if not target_dir.startswith(UPLOAD_DIR.rstrip("/") + "/"):
             return jsonify({"error": "invalid path"}), 400
 
     try:
