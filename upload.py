@@ -65,7 +65,7 @@ def api_list_files():
     entries = []
     for name in names:
         full = os.path.join(target_dir, name)
-        if name == "index.html":
+        if name.startswith(".") or name == "index.html":
             continue
         try:
             st = os.stat(full)
