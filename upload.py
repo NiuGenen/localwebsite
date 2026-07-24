@@ -84,7 +84,9 @@ def api_list_files():
 
 @app.route("/upload/api/dirs")
 def api_dirs():
-    return jsonify({"dirs": list_subdirs(UPLOAD_DIR)})
+    all_dirs = list_subdirs(UPLOAD_DIR)
+    allowed = [d for d in all_dirs if not is_blocked(d)]
+    return jsonify({"dirs": allowed})
 
 @app.route("/upload/api/mkdir", methods=["POST"])
 def api_mkdir():
