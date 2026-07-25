@@ -32,6 +32,16 @@ def is_blocked(rel_path):
             return True
     return False
 
+def safe_join_soft(base, child):
+    """Join paths without following symlinks; prevents .. traversal."""
+    if not child or child.strip() == "":
+        return base
+    norm = os.path.normpath(os.path.join(base, child))
+    base_str = base.rstrip("/") + "/"
+    if not norm.startswith(base_str):
+        return None
+    return norm
+
 def list_subdirs(base):
     dirs = []
     for root, dirnames, _ in os.walk(base):
@@ -104,7 +114,7 @@ def api_mkdir():
 
     parent_dir = UPLOAD_DIR
     if parent:
-        parent_dir = safe_join(UPLOAD_DIR, parent)
+        parent_dir = safe_join_soft(UPLOAD_DIR, parent)
         if not parent_dir:
             return jsonify({"error": "无效的父目录"}), 400
 
@@ -113,15 +123,14 @@ def api_mkdir():
         return jsonify({"error": "该目录不允许创建文件夹"}), 403
 
     new_dir = os.path.join(parent_dir, name)
-    new_dir_real = os.path.realpath(new_dir)
-
-    base_real = os.path.realpath(UPLOAD_DIR)
-    if not new_dir_real.startswith(base_real + os.sep):
+    new_dir_norm = os.path.normpath(new_dir)
+    base_str = UPLOAD_DIR.rstrip("/") + "/"
+    if not new_dir_norm.startswith(base_str):
         return jsonify({"error": "无效的路径"}), 400
 
     try:
-        os.makedirs(new_dir_real, exist_ok=True)
-        rel_path = os.path.relpath(new_dir_real, UPLOAD_DIR)
+        os.makedirs(new_dir_norm, exist_ok=True)
+        rel_path = os.path.relpath(new_dir_norm, UPLOAD_DIR)
         return jsonify({"success": True, "path": rel_path})
     except Exception as e:
         return jsonify({"error": f"创建失败: {e}"}), 500
@@ -287,17 +296,17 @@ def upload():
     if subdir:
         if is_blocked(subdir):
             return render_page(error="该目录不允许文件上传"), 403
-        target_dir = safe_join(UPLOAD_DIR, subdir)
+        target_dir = safe_join_soft(UPLOAD_DIR, subdir)
         if not target_dir:
             return render_page(error="无效的目录路径"), 400
 
     save_path = os.path.join(target_dir, f.filename)
-    save_path_real = os.path.realpath(save_path)
-    base_real = os.path.realpath(UPLOAD_DIR)
-    if not save_path_real.startswith(base_real + os.sep):
+    save_path_norm = os.path.normpath(save_path)
+    base_str = UPLOAD_DIR.rstrip("/") + "/"
+    if not save_path_norm.startswith(base_str):
         return render_page(error="无效的文件路径"), 400
 
-    f.save(save_path_real)
+    f.save(save_path_norm)
     return render_page(message=f"文件 {f.filename} 上传成功")
 
 
