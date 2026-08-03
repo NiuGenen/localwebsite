@@ -510,19 +510,24 @@ footer {
 
 .fb-action-btn:disabled,
 .fb-action-btn[disabled] {
-    background: #bdc3c7;
+    background: #a9c4d9;
     color: #f8f9fa;
     cursor: not-allowed;
     transform: none;
 }
 .fb-action-btn:disabled:hover,
 .fb-action-btn[disabled]:hover {
-    background: #bdc3c7;
+    background: #a9c4d9;
     transform: none;
 }
 .btn-success:disabled,
 .btn-success[disabled] {
     background: #a9c9b4;
+}
+.btn-success:disabled:hover,
+.btn-success[disabled]:hover {
+    background: #a9c9b4;
+    transform: none;
 }
 
 .fb-msg {
