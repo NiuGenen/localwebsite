@@ -717,11 +717,12 @@ footer {
     word-break: break-all;
 }
 .fb-col-size {
-    width: 5rem;
+    width: 6rem;
     text-align: right;
     color: #888;
     font-size: 0.85rem;
     font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+    white-space: nowrap;
 }
 .fb-col-date {
     width: 10rem;
@@ -818,7 +819,8 @@ footer {
         display: none;
     }
     .fb-col-size {
-        width: 4rem;
+        width: 4.5rem;
+        white-space: nowrap;
     }
     .fb-toolbar {
         flex-direction: column;
