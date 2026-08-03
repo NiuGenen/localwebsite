@@ -12,8 +12,7 @@
         <h1>本地文件站</h1>
         <nav>
             <a href="/">首页</a>
-            <a href="/files/" class="active">文件下载</a>
-            <a href="/upload">文件上传</a>
+            <a href="/files/" class="active">文件浏览</a>
             <a href="/reader.html">Markdown阅读</a>
             <a href="/info.html">关于</a>
         </nav>
@@ -21,9 +20,21 @@
     <main>
         <section class="fb-panel">
             <div class="fb-toolbar">
-                <span class="fb-path" id="fb-path"></span>
-                <span class="fb-count" id="fb-count"></span>
+                <div class="fb-toolbar-left">
+                    <span class="fb-path" id="fb-path"></span>
+                    <span class="fb-count" id="fb-count"></span>
+                </div>
+                <div class="fb-actions" id="fb-actions">
+                    <button type="button" class="btn btn-sm fb-action-btn" id="fb-upload-btn" title="上传文件到当前目录">
+                        <i class="fas fa-upload"></i> 上传文件
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success fb-action-btn" id="fb-mkdir-btn" title="在当前目录新建文件夹">
+                        <i class="fas fa-folder-plus"></i> 新建文件夹
+                    </button>
+                    <input type="file" id="fb-file-input" multiple style="display:none">
+                </div>
             </div>
+            <div id="fb-msg" class="fb-msg" style="display:none"></div>
             <div id="fb-error" class="fb-error" style="display:none"></div>
             <div id="fb-loading" class="fb-loading">加载中...</div>
             <table class="fb-table" id="fb-table" style="display:none">
@@ -43,6 +54,19 @@
     <footer>
         <p>&copy; 2026 本地文件站</p>
     </footer>
+
+    <div class="fb-modal-overlay" id="fb-modal" style="display:none">
+        <div class="fb-modal">
+            <h3 class="fb-modal-title">新建文件夹</h3>
+            <input type="text" id="fb-modal-input" class="fb-modal-input" placeholder="输入文件夹名称">
+            <p class="fb-modal-hint" id="fb-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="fb-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="fb-modal-confirm">创建</button>
+            </div>
+        </div>
+    </div>
+
     <script>
 (function () {
     var tbody = document.getElementById('fb-tbody');
@@ -52,10 +76,22 @@
     var empty = document.getElementById('fb-empty');
     var pathEl = document.getElementById('fb-path');
     var countEl = document.getElementById('fb-count');
+    var msgEl = document.getElementById('fb-msg');
+    var uploadBtn = document.getElementById('fb-upload-btn');
+    var mkdirBtn = document.getElementById('fb-mkdir-btn');
+    var fileInput = document.getElementById('fb-file-input');
+    var modal = document.getElementById('fb-modal');
+    var modalInput = document.getElementById('fb-modal-input');
+    var modalHint = document.getElementById('fb-modal-hint');
+    var modalConfirm = document.getElementById('fb-modal-confirm');
+    var modalCancel = document.getElementById('fb-modal-cancel');
+
+    var currentPath = '';
+    var currentBlocked = false;
+    var msgTimer = null;
 
     function getPath() {
-        var hash = window.location.hash.replace(/^#\/*/, '');
-        return hash;
+        return window.location.hash.replace(/^#\/*/, '');
     }
 
     function humanSize(bytes) {
@@ -162,14 +198,38 @@
         return tr;
     }
 
+    function setButtonsEnabled(enabled) {
+        uploadBtn.disabled = !enabled || currentBlocked;
+        mkdirBtn.disabled = !enabled || currentBlocked;
+        if (currentBlocked && enabled) {
+            uploadBtn.title = '当前目录不允许上传';
+            mkdirBtn.title = '当前目录不允许新建文件夹';
+        } else {
+            uploadBtn.title = '上传文件到当前目录';
+            mkdirBtn.title = '在当前目录新建文件夹';
+        }
+    }
+
+    function showMsg(text, isErr) {
+        clearTimeout(msgTimer);
+        msgEl.textContent = text;
+        msgEl.className = 'fb-msg ' + (isErr ? 'fb-msg-err' : 'fb-msg-ok');
+        msgEl.style.display = '';
+        msgTimer = setTimeout(function () {
+            msgEl.style.display = 'none';
+        }, 4000);
+    }
+
     function loadDir(path) {
+        currentPath = path || '';
         loading.style.display = '';
         table.style.display = 'none';
         empty.style.display = 'none';
         error.style.display = 'none';
         tbody.innerHTML = '';
+        setButtonsEnabled(false);
 
-        var url = '/api/files' + (path ? '?path=' + encodeURIComponent(path) : '');
+        var url = '/api/files' + (currentPath ? '?path=' + encodeURIComponent(currentPath) : '');
         fetch(url)
             .then(function (r) {
                 if (!r.ok) throw new Error('请求失败 (HTTP ' + r.status + ')');
@@ -177,10 +237,12 @@
             })
             .then(function (data) {
                 loading.style.display = 'none';
+                currentBlocked = !!data.blocked;
+                setButtonsEnabled(true);
                 var entries = data.entries;
                 if (!entries || entries.length === 0) {
                     empty.style.display = '';
-                    pathEl.innerHTML = renderBreadcrumb(path);
+                    pathEl.innerHTML = renderBreadcrumb(currentPath);
                     countEl.textContent = '0 项';
                     return;
                 }
@@ -189,25 +251,139 @@
                 var files = entries.filter(function (e) { return e.type === 'file'; });
 
                 dirs.forEach(function (d) {
-                    tbody.appendChild(buildRow(d, path));
+                    tbody.appendChild(buildRow(d, currentPath));
                 });
                 files.forEach(function (f) {
-                    tbody.appendChild(buildRow(f, path));
+                    tbody.appendChild(buildRow(f, currentPath));
                 });
 
                 table.style.display = '';
-                pathEl.innerHTML = renderBreadcrumb(path);
+                pathEl.innerHTML = renderBreadcrumb(currentPath);
                 countEl.textContent = entries.length + ' 项';
             })
             .catch(function (err) {
                 loading.style.display = 'none';
+                setButtonsEnabled(true);
                 error.style.display = '';
                 error.textContent = '加载失败: ' + err.message;
-                pathEl.innerHTML = renderBreadcrumb(path);
+                pathEl.innerHTML = renderBreadcrumb(currentPath);
                 countEl.textContent = '';
             });
     }
 
+    // ===== 上传 =====
+    uploadBtn.addEventListener('click', function () {
+        if (uploadBtn.disabled) return;
+        fileInput.click();
+    });
+
+    fileInput.addEventListener('change', function () {
+        var files = fileInput.files;
+        if (!files || files.length === 0) return;
+
+        var fd = new FormData();
+        if (currentPath) fd.append('path', currentPath);
+        for (var i = 0; i < files.length; i++) {
+            fd.append('file', files[i]);
+        }
+
+        uploadBtn.disabled = true;
+        mkdirBtn.disabled = true;
+        showMsg('正在上传 ' + files.length + ' 个文件...', false);
+
+        fetch('/api/upload', { method: 'POST', body: fd })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    return { ok: r.ok, data: data };
+                });
+            })
+            .then(function (res) {
+                if (res.ok) {
+                    showMsg('上传成功: ' + res.data.names.join(', '), false);
+                    loadDir(currentPath);
+                } else {
+                    showMsg('上传失败: ' + (res.data.error || '未知错误'), true);
+                    setButtonsEnabled(true);
+                }
+            })
+            .catch(function () {
+                showMsg('上传失败: 网络错误', true);
+                setButtonsEnabled(true);
+            });
+
+        fileInput.value = '';
+    });
+
+    // ===== 新建文件夹 =====
+    function openModal() {
+        modalInput.value = '';
+        modalHint.textContent = '';
+        modalHint.className = 'fb-modal-hint';
+        modal.style.display = 'flex';
+        modalInput.focus();
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+
+    function doMkdir() {
+        var name = modalInput.value.trim();
+        if (!name) {
+            modalHint.textContent = '请输入文件夹名称';
+            modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+            return;
+        }
+        modalConfirm.disabled = true;
+        modalConfirm.textContent = '创建中...';
+        modalHint.textContent = '';
+
+        fetch('/api/mkdir', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parent: currentPath, name: name })
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    return { ok: r.ok, data: data };
+                });
+            })
+            .then(function (res) {
+                if (res.ok) {
+                    closeModal();
+                    showMsg('已创建文件夹: ' + res.data.path, false);
+                    loadDir(currentPath);
+                } else {
+                    modalHint.textContent = res.data.error || '创建失败';
+                    modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+                }
+            })
+            .catch(function () {
+                modalHint.textContent = '网络错误';
+                modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+            })
+            .finally(function () {
+                modalConfirm.disabled = false;
+                modalConfirm.textContent = '创建';
+            });
+    }
+
+    mkdirBtn.addEventListener('click', function () {
+        if (mkdirBtn.disabled) return;
+        openModal();
+    });
+
+    modalConfirm.addEventListener('click', doMkdir);
+    modalCancel.addEventListener('click', closeModal);
+    modalInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') { e.preventDefault(); doMkdir(); }
+        if (e.key === 'Escape') { closeModal(); }
+    });
+    modal.addEventListener('click', function (e) {
+        if (e.target === modal) closeModal();
+    });
+
+    // ===== 路由 =====
     function onHashChange() {
         loadDir(getPath());
     }

@@ -486,6 +486,119 @@ footer {
     gap: 0.5rem;
 }
 
+.fb-toolbar-left {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+.fb-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+}
+
+.fb-action-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+
+.fb-action-btn:disabled,
+.fb-action-btn[disabled] {
+    background: #bdc3c7;
+    color: #f8f9fa;
+    cursor: not-allowed;
+    transform: none;
+}
+.fb-action-btn:disabled:hover,
+.fb-action-btn[disabled]:hover {
+    background: #bdc3c7;
+    transform: none;
+}
+.btn-success:disabled,
+.btn-success[disabled] {
+    background: #a9c9b4;
+}
+
+.fb-msg {
+    padding: 0.6rem 1.25rem;
+    font-size: 0.9rem;
+    border-bottom: 1px solid #eee;
+}
+.fb-msg-ok {
+    background: #eafaf1;
+    color: #1e8449;
+}
+.fb-msg-err {
+    background: #fdedec;
+    color: #c0392b;
+}
+
+/* Modal */
+.fb-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.fb-modal {
+    background: #fff;
+    border-radius: 8px;
+    padding: 1.5rem;
+    width: 90%;
+    max-width: 360px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+
+.fb-modal-title {
+    margin-bottom: 1rem;
+    color: #2c3e50;
+    font-size: 1.05rem;
+}
+
+.fb-modal-input {
+    width: 100%;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+.fb-modal-input:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
+}
+
+.fb-modal-hint {
+    margin: 0.5rem 0 0;
+    font-size: 0.85rem;
+    color: #999;
+    min-height: 1.2em;
+}
+.fb-modal-hint-err {
+    color: #e74c3c;
+}
+
+.fb-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 1rem;
+}
+
 .fb-path {
     font-size: 0.95rem;
     color: #555;
