@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=3">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -31,6 +31,9 @@
                     <button type="button" class="btn btn-sm btn-success fb-action-btn" id="fb-mkdir-btn" title="在当前目录新建文件夹">
                         <i class="fas fa-folder-plus"></i> 新建文件夹
                     </button>
+                    <button type="button" class="btn btn-sm btn-move fb-action-btn" id="fb-paste-btn" title="粘贴已剪切的文件到当前目录" disabled>
+                        <i class="fas fa-paste"></i> 粘贴
+                    </button>
                     <input type="file" id="fb-file-input" multiple style="display:none">
                 </div>
             </div>
@@ -44,6 +47,7 @@
                         <th class="fb-col-name">名称</th>
                         <th class="fb-col-size">大小</th>
                         <th class="fb-col-date">修改时间</th>
+                        <th class="fb-col-op">操作</th>
                     </tr>
                 </thead>
                 <tbody id="fb-tbody"></tbody>
@@ -79,6 +83,7 @@
     var msgEl = document.getElementById('fb-msg');
     var uploadBtn = document.getElementById('fb-upload-btn');
     var mkdirBtn = document.getElementById('fb-mkdir-btn');
+    var pasteBtn = document.getElementById('fb-paste-btn');
     var fileInput = document.getElementById('fb-file-input');
     var modal = document.getElementById('fb-modal');
     var modalInput = document.getElementById('fb-modal-input');
@@ -89,6 +94,7 @@
     var currentPath = '';
     var currentBlocked = false;
     var msgTimer = null;
+    var cutItem = null;
 
     function getPath() {
         return window.location.hash.replace(/^#\/*/, '');
@@ -195,19 +201,82 @@
         dateTd.textContent = fmtDate(entry.mtime);
         tr.appendChild(dateTd);
 
+        var opTd = document.createElement('td');
+        opTd.className = 'fb-col-op';
+        if (entry.type === 'file') {
+            var cutBtn = document.createElement('button');
+            cutBtn.type = 'button';
+            cutBtn.className = 'fb-cut-btn';
+            cutBtn.title = '剪切此文件';
+            cutBtn.innerHTML = '<i class="fas fa-scissors"></i> 剪切';
+            cutBtn.disabled = currentBlocked;
+            cutBtn.addEventListener('click', function () {
+                doCut(tr, entry, path);
+            });
+            opTd.appendChild(cutBtn);
+        }
+        tr.appendChild(opTd);
+        tr.dataset.name = entry.name;
+
         return tr;
     }
 
     function setButtonsEnabled(enabled) {
         uploadBtn.disabled = !enabled || currentBlocked;
         mkdirBtn.disabled = !enabled || currentBlocked;
+        pasteBtn.disabled = !enabled || currentBlocked || !cutItem;
         if (currentBlocked && enabled) {
             uploadBtn.title = '当前目录不允许上传';
             mkdirBtn.title = '当前目录不允许新建文件夹';
+            pasteBtn.title = '当前目录不允许粘贴';
         } else {
             uploadBtn.title = '上传文件到当前目录';
             mkdirBtn.title = '在当前目录新建文件夹';
+            pasteBtn.title = cutItem
+                ? '粘贴 ' + cutItem.name + ' 到当前目录'
+                : '粘贴已剪切的文件到当前目录';
         }
+    }
+
+    function doCut(tr, entry, path) {
+        var rows = tbody.querySelectorAll('.fb-row-cut');
+        rows.forEach(function (r) { r.classList.remove('fb-row-cut'); });
+        cutItem = { path: (path ? path + '/' : '') + entry.name, name: entry.name };
+        tr.classList.add('fb-row-cut');
+        showMsg('已剪切: ' + entry.name + '，请导航到目标文件夹后点击「粘贴」', false);
+        setButtonsEnabled(true);
+    }
+
+    function doPaste() {
+        if (!cutItem) return;
+        pasteBtn.disabled = true;
+        showMsg('正在移动 ' + cutItem.name + ' ...', false);
+
+        fetch('/api/move', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ src: cutItem.path, dst: currentPath })
+        })
+            .then(function (r) {
+                return r.json().then(function (d) {
+                    return { ok: r.ok, data: d };
+                });
+            })
+            .then(function (res) {
+                if (res.ok) {
+                    showMsg('已移动: ' + res.data.name + ' → ' + (res.data.to || '根目录'), false);
+                    cutItem = null;
+                    tbody.querySelectorAll('.fb-row-cut').forEach(function (r) { r.classList.remove('fb-row-cut'); });
+                    loadDir(currentPath);
+                } else {
+                    showMsg('移动失败: ' + (res.data.error || '未知错误'), true);
+                    setButtonsEnabled(true);
+                }
+            })
+            .catch(function () {
+                showMsg('移动失败: 网络错误', true);
+                setButtonsEnabled(true);
+            });
     }
 
     function showMsg(text, isErr) {
@@ -256,6 +325,19 @@
                 files.forEach(function (f) {
                     tbody.appendChild(buildRow(f, currentPath));
                 });
+
+                if (cutItem) {
+                    var cutDir = cutItem.path.indexOf('/') >= 0
+                        ? cutItem.path.slice(0, cutItem.path.lastIndexOf('/'))
+                        : '';
+                    if (cutDir === currentPath) {
+                        tbody.querySelectorAll('tr').forEach(function (r) {
+                            if (r.dataset.name === cutItem.name) {
+                                r.classList.add('fb-row-cut');
+                            }
+                        });
+                    }
+                }
 
                 table.style.display = '';
                 pathEl.innerHTML = renderBreadcrumb(currentPath);
@@ -371,6 +453,11 @@
     mkdirBtn.addEventListener('click', function () {
         if (mkdirBtn.disabled) return;
         openModal();
+    });
+
+    pasteBtn.addEventListener('click', function () {
+        if (pasteBtn.disabled) return;
+        doPaste();
     });
 
     modalConfirm.addEventListener('click', doMkdir);

@@ -730,6 +730,66 @@ footer {
     font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
     white-space: nowrap;
 }
+.fb-col-op {
+    width: 4.5rem;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.fb-cut-btn {
+    background: none;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    color: #666;
+    font-size: 0.8rem;
+    padding: 0.2rem 0.5rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.fb-cut-btn:hover {
+    background: #f0f4f8;
+    color: #e67e22;
+    border-color: #e67e22;
+}
+.fb-cut-btn:disabled,
+.fb-cut-btn[disabled] {
+    color: #bbb;
+    border-color: #eee;
+    background: none;
+    cursor: not-allowed;
+}
+
+.fb-row-cut {
+    background: #fdf2d0;
+}
+.fb-row-cut:hover {
+    background: #f8e8b8;
+}
+
+.btn-move {
+    background: #e67e22;
+    color: #fff;
+}
+.btn-move:hover {
+    background: #d35400;
+    color: #fff;
+    transform: translateY(-1px);
+}
+.btn-move:disabled,
+.btn-move[disabled] {
+    background: #e3c2a0;
+    color: #f8f9fa;
+    cursor: not-allowed;
+    transform: none;
+}
+.btn-move:disabled:hover,
+.btn-move[disabled]:hover {
+    background: #e3c2a0;
+    transform: none;
+}
 
 .fb-link {
     text-decoration: none;

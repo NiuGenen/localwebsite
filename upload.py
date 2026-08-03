@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -141,6 +142,51 @@ def api_mkdir():
         return jsonify({"success": True, "path": rel_path})
     except Exception as e:
         return jsonify({"error": f"创建失败: {e}"}), 500
+
+# ===== 移动文件 API =====
+
+@app.route("/api/move", methods=["POST"])
+def api_move():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "无效的请求"}), 400
+
+    src = data.get("src", "").strip().strip("/")
+    dst = data.get("dst", "").strip().strip("/")
+
+    if not src:
+        return jsonify({"error": "源文件不能为空"}), 400
+
+    src_path = safe_join_soft(UPLOAD_DIR, src)
+    if not src_path or src_path == UPLOAD_DIR:
+        return jsonify({"error": "无效的源路径"}), 400
+    if not os.path.isfile(src_path):
+        return jsonify({"error": "只能移动文件，不能移动文件夹"}), 400
+
+    rel_src = os.path.relpath(src_path, UPLOAD_DIR)
+    if is_blocked(rel_src):
+        return jsonify({"error": "该目录不允许移动文件"}), 403
+
+    dst_dir = UPLOAD_DIR if not dst else safe_join_soft(UPLOAD_DIR, dst)
+    if not dst_dir:
+        return jsonify({"error": "无效的目标目录"}), 400
+    if not os.path.isdir(dst_dir):
+        return jsonify({"error": "目标目录不存在"}), 400
+
+    rel_dst = os.path.relpath(dst_dir, UPLOAD_DIR)
+    if is_blocked(rel_dst):
+        return jsonify({"error": "该目录不允许移动文件"}), 403
+
+    dest_path = os.path.normpath(os.path.join(dst_dir, os.path.basename(src_path)))
+    if os.path.lexists(dest_path):
+        return jsonify({"error": "目标位置已存在同名文件"}), 400
+
+    try:
+        shutil.move(src_path, dest_path)
+        to = "" if rel_dst == "." else rel_dst
+        return jsonify({"success": True, "name": os.path.basename(src_path), "to": to})
+    except Exception as e:
+        return jsonify({"error": f"移动失败: {e}"}), 500
 
 
 if __name__ == "__main__":
