@@ -58,11 +58,13 @@ def api_list_files():
         try:
             st = os.stat(full)
             is_dir = os.path.isdir(full)
+            entry_rel = path + "/" + name if path else name
             entries.append({
                 "name": name,
                 "type": "dir" if is_dir else "file",
                 "size": st.st_size if not is_dir else 0,
-                "mtime": int(st.st_mtime)
+                "mtime": int(st.st_mtime),
+                "blocked": is_blocked(entry_rel)
             })
         except OSError:
             pass
@@ -187,6 +189,50 @@ def api_move():
         return jsonify({"success": True, "name": os.path.basename(src_path), "to": to})
     except Exception as e:
         return jsonify({"error": f"移动失败: {e}"}), 500
+
+# ===== 重命名 API =====
+
+@app.route("/api/rename", methods=["POST"])
+def api_rename():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "无效的请求"}), 400
+
+    path = data.get("path", "").strip().strip("/")
+    name = data.get("name", "").strip()
+
+    if not path:
+        return jsonify({"error": "路径不能为空"}), 400
+    if not name:
+        return jsonify({"error": "名称不能为空"}), 400
+    if not safe_leaf_name(name):
+        return jsonify({"error": "名称包含非法字符"}), 400
+
+    src = safe_join_soft(UPLOAD_DIR, path)
+    if not src or src == UPLOAD_DIR:
+        return jsonify({"error": "无效的路径"}), 400
+    if not os.path.lexists(src):
+        return jsonify({"error": "目标不存在"}), 400
+
+    rel_src = os.path.relpath(src, UPLOAD_DIR)
+    if is_blocked(rel_src):
+        return jsonify({"error": "该目录不允许重命名"}), 403
+    if os.path.basename(src) == "index.html":
+        return jsonify({"error": "该文件不允许重命名"}), 403
+
+    new_path = os.path.normpath(os.path.join(os.path.dirname(src), name))
+    base_str = UPLOAD_DIR.rstrip("/") + "/"
+    if not new_path.startswith(base_str):
+        return jsonify({"error": "无效的路径"}), 400
+    if os.path.lexists(new_path):
+        return jsonify({"error": "已存在同名目录或文件"}), 400
+
+    try:
+        os.rename(src, new_path)
+        new_rel = os.path.relpath(new_path, UPLOAD_DIR)
+        return jsonify({"success": True, "old": path, "new": new_rel})
+    except Exception as e:
+        return jsonify({"error": f"重命名失败: {e}"}), 500
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=5">
+    <link rel="stylesheet" href="/css/style.css?v=6">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -61,7 +61,7 @@
 
     <div class="fb-modal-overlay" id="fb-modal" style="display:none">
         <div class="fb-modal">
-            <h3 class="fb-modal-title">新建文件夹</h3>
+            <h3 class="fb-modal-title" id="fb-modal-title">新建文件夹</h3>
             <input type="text" id="fb-modal-input" class="fb-modal-input" placeholder="输入文件夹名称">
             <p class="fb-modal-hint" id="fb-modal-hint"></p>
             <div class="fb-modal-actions">
@@ -86,6 +86,7 @@
     var pasteBtn = document.getElementById('fb-paste-btn');
     var fileInput = document.getElementById('fb-file-input');
     var modal = document.getElementById('fb-modal');
+    var modalTitle = document.getElementById('fb-modal-title');
     var modalInput = document.getElementById('fb-modal-input');
     var modalHint = document.getElementById('fb-modal-hint');
     var modalConfirm = document.getElementById('fb-modal-confirm');
@@ -95,6 +96,8 @@
     var currentBlocked = false;
     var msgTimer = null;
     var cutItem = null;
+    var modalMode = 'mkdir';
+    var renameTarget = null;
 
     function getPath() {
         return window.location.hash.replace(/^#\/*/, '');
@@ -203,6 +206,17 @@
 
         var opTd = document.createElement('td');
         opTd.className = 'fb-col-op';
+        var opDisabled = currentBlocked || !!entry.blocked;
+        var renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'fb-rename-btn';
+        renameBtn.title = '重命名';
+        renameBtn.innerHTML = '<i class="fas fa-pen"></i>';
+        renameBtn.disabled = opDisabled;
+        renameBtn.addEventListener('click', function () {
+            openRenameModal(tr, entry, path);
+        });
+        opTd.appendChild(renameBtn);
         if (entry.type === 'file') {
             var cutBtn = document.createElement('button');
             cutBtn.type = 'button';
@@ -396,17 +410,30 @@
         fileInput.value = '';
     });
 
-    // ===== 新建文件夹 =====
-    function openModal() {
-        modalInput.value = '';
+    // ===== 弹窗（新建文件夹 / 重命名）=====
+    function openModal(mode, prefill, target) {
+        modalMode = mode;
+        renameTarget = target || null;
+        modalTitle.textContent = mode === 'rename' ? '重命名' : '新建文件夹';
+        modalInput.placeholder = mode === 'rename' ? '输入新名称' : '输入文件夹名称';
+        modalInput.value = prefill || '';
+        modalConfirm.textContent = mode === 'rename' ? '保存' : '创建';
         modalHint.textContent = '';
         modalHint.className = 'fb-modal-hint';
         modal.style.display = 'flex';
         modalInput.focus();
+        if (prefill) {
+            modalInput.setSelectionRange(0, prefill.lastIndexOf('.') > 0 ? prefill.lastIndexOf('.') : prefill.length);
+        }
     }
 
     function closeModal() {
         modal.style.display = 'none';
+    }
+
+    function openRenameModal(tr, entry, path) {
+        if (tr.querySelector('.fb-rename-btn').disabled) return;
+        openModal('rename', entry.name, { path: (path ? path + '/' : '') + entry.name, name: entry.name });
     }
 
     function doMkdir() {
@@ -450,9 +477,58 @@
             });
     }
 
+    function doRename() {
+        var name = modalInput.value.trim();
+        if (!name) {
+            modalHint.textContent = '名称不能为空';
+            modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+            return;
+        }
+        modalConfirm.disabled = true;
+        modalConfirm.textContent = '保存中...';
+        modalHint.textContent = '';
+
+        fetch('/api/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: renameTarget.path, name: name })
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    return { ok: r.ok, data: data };
+                });
+            })
+            .then(function (res) {
+                if (res.ok) {
+                    closeModal();
+                    showMsg('已重命名: ' + renameTarget.name + ' → ' + name, false);
+                    loadDir(currentPath);
+                } else {
+                    modalHint.textContent = res.data.error || '重命名失败';
+                    modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+                }
+            })
+            .catch(function () {
+                modalHint.textContent = '网络错误';
+                modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+            })
+            .finally(function () {
+                modalConfirm.disabled = false;
+                modalConfirm.textContent = '保存';
+            });
+    }
+
+    function doModalConfirm() {
+        if (modalMode === 'rename') {
+            doRename();
+        } else {
+            doMkdir();
+        }
+    }
+
     mkdirBtn.addEventListener('click', function () {
         if (mkdirBtn.disabled) return;
-        openModal();
+        openModal('mkdir');
     });
 
     pasteBtn.addEventListener('click', function () {
@@ -460,10 +536,10 @@
         doPaste();
     });
 
-    modalConfirm.addEventListener('click', doMkdir);
+    modalConfirm.addEventListener('click', doModalConfirm);
     modalCancel.addEventListener('click', closeModal);
     modalInput.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); doMkdir(); }
+        if (e.key === 'Enter') { e.preventDefault(); doModalConfirm(); }
         if (e.key === 'Escape') { closeModal(); }
     });
     modal.addEventListener('click', function (e) {
