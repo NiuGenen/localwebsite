@@ -731,7 +731,7 @@ footer {
     white-space: nowrap;
 }
 .fb-col-op {
-    width: 4.5rem;
+    width: 3rem;
     text-align: center;
     white-space: nowrap;
 }
@@ -742,11 +742,14 @@ footer {
     border-radius: 4px;
     color: #666;
     font-size: 0.8rem;
-    padding: 0.2rem 0.5rem;
+    width: 1.9rem;
+    height: 1.9rem;
+    line-height: 1;
+    padding: 0;
     cursor: pointer;
     display: inline-flex;
     align-items: center;
-    gap: 0.3rem;
+    justify-content: center;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .fb-cut-btn:hover {

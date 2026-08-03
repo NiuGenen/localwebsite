@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=3">
+    <link rel="stylesheet" href="/css/style.css?v=4">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -208,7 +208,7 @@
             cutBtn.type = 'button';
             cutBtn.className = 'fb-cut-btn';
             cutBtn.title = '剪切此文件';
-            cutBtn.innerHTML = '<i class="fas fa-scissors"></i> 剪切';
+            cutBtn.innerHTML = '<i class="fas fa-scissors"></i>';
             cutBtn.disabled = currentBlocked;
             cutBtn.addEventListener('click', function () {
                 doCut(tr, entry, path);
