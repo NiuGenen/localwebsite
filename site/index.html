@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=2">
+    <link rel="stylesheet" href="/css/style.css?v=7">
 </head>
 <body>
     <header>
@@ -23,6 +23,16 @@
             <p class="hero-desc">这是一个用于文件浏览和信息阅读的本地网站。</p>
         </section>
         <section class="quick-links">
+            <div class="card width-card">
+                <h3>内容宽度</h3>
+                <p class="width-desc">当前宽度：<span class="width-value" id="width-value">900</span> px</p>
+                <div class="width-slider-row">
+                    <span class="width-min">标准 900</span>
+                    <input type="range" id="width-slider" min="900" max="1800" step="20">
+                    <span class="width-max">加宽 1800</span>
+                </div>
+                <p class="width-hint">调整网页内容区宽度，对所有页面生效，并在浏览器中记住。</p>
+            </div>
             <div class="card card-download">
                 <div class="card-icon">📂</div>
                 <h3>文件浏览</h3>
@@ -40,5 +50,6 @@
     <footer>
         <p>&copy; 2026 本地文件站</p>
     </footer>
+    <script src="/js/layout.js"></script>
 </body>
 </html>

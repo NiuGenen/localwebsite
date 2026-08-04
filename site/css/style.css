@@ -60,7 +60,7 @@ nav a:hover::after, nav a.active::after {
 
 main {
     flex: 1;
-    max-width: 900px;
+    max-width: var(--content-width, 900px);
     width: 100%;
     margin: 2rem auto;
     padding: 0 1rem;
@@ -156,6 +156,43 @@ section {
 
 .card .btn {
     align-self: flex-start;
+}
+
+/* ===== Content width card ===== */
+.width-card {
+    grid-column: 1 / -1;
+    border-top-color: #16a085;
+}
+.width-desc {
+    margin-bottom: 0.5rem;
+}
+.width-value {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+    font-weight: 600;
+    color: #16a085;
+}
+.width-slider-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: 0.5rem 0 0.25rem;
+}
+.width-slider-row input[type="range"] {
+    flex: 1;
+    width: 100%;
+    accent-color: #16a085;
+    cursor: pointer;
+}
+.width-min,
+.width-max {
+    font-size: 0.8rem;
+    color: #999;
+    white-space: nowrap;
+}
+.width-hint {
+    margin-bottom: 0;
+    font-size: 0.8rem;
+    color: #aaa;
 }
 
 .btn {
