@@ -1,11 +1,21 @@
 import os
 import re
 import shutil
+import time
+import uuid
+import json
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# ===== 本机访问判定（本机 IP，IP 变更时改这里）=====
+LOCAL_IPS = {"127.0.0.1", "::1", "192.168.8.65"}
+
+# ===== 待办事项数据文件 =====
+TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
+PRIORITIES = ("high", "medium", "low")
 
 # ===== 禁止上传/创建的黑名单（相对 files/，前缀匹配）=====
 BLOCKED_PATHS = ["binary-translation"]
@@ -233,6 +243,87 @@ def api_rename():
         return jsonify({"success": True, "old": path, "new": new_rel})
     except Exception as e:
         return jsonify({"error": f"重命名失败: {e}"}), 500
+
+# ===== 本机判定 API =====
+
+@app.route("/api/local")
+def api_local():
+    client = request.headers.get("X-Real-IP", "") or request.remote_addr or ""
+    return jsonify({"local": client in LOCAL_IPS})
+
+# ===== 待办事项 API =====
+
+def load_todos():
+    try:
+        with open(TODO_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_todos(todos):
+    tmp = TODO_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(todos, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, TODO_FILE)
+
+@app.route("/api/todo", methods=["GET"])
+def api_todo_list():
+    return jsonify(load_todos())
+
+@app.route("/api/todo", methods=["POST"])
+def api_todo_add():
+    data = request.get_json() or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "事项内容不能为空"}), 400
+    if len(text) > 200:
+        return jsonify({"error": "事项内容过长"}), 400
+    priority = data.get("priority") if data.get("priority") in PRIORITIES else "medium"
+
+    todos = load_todos()
+    item = {
+        "id": uuid.uuid4().hex,
+        "text": text,
+        "priority": priority,
+        "done": False,
+        "created": int(time.time()),
+        "updated": int(time.time()),
+    }
+    todos.append(item)
+    save_todos(todos)
+    return jsonify(item), 201
+
+@app.route("/api/todo/<todo_id>", methods=["PUT"])
+def api_todo_update(todo_id):
+    data = request.get_json() or {}
+    todos = load_todos()
+    for it in todos:
+        if it["id"] == todo_id:
+            if "text" in data:
+                t = (data["text"] or "").strip()
+                if not t:
+                    return jsonify({"error": "事项内容不能为空"}), 400
+                if len(t) > 200:
+                    return jsonify({"error": "事项内容过长"}), 400
+                it["text"] = t
+            if "priority" in data and data["priority"] in PRIORITIES:
+                it["priority"] = data["priority"]
+            if "done" in data:
+                it["done"] = bool(data["done"])
+            it["updated"] = int(time.time())
+            save_todos(todos)
+            return jsonify(it)
+    return jsonify({"error": "待办事项不存在"}), 404
+
+@app.route("/api/todo/<todo_id>", methods=["DELETE"])
+def api_todo_delete(todo_id):
+    todos = load_todos()
+    new_todos = [it for it in todos if it["id"] != todo_id]
+    if len(new_todos) == len(todos):
+        return jsonify({"error": "待办事项不存在"}), 404
+    save_todos(new_todos)
+    return jsonify({"success": True})
 
 
 if __name__ == "__main__":

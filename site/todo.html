@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>待办事项 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=8">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="todo-panel">
+            <div class="todo-head">
+                <h2>待办事项</h2>
+                <span class="todo-count" id="todo-count"></span>
+            </div>
+            <div class="todo-add-row">
+                <input type="text" id="todo-input" placeholder="添加待办事项..." maxlength="200">
+                <select id="todo-add-priority">
+                    <option value="high">高优先级</option>
+                    <option value="medium" selected>中优先级</option>
+                    <option value="low">低优先级</option>
+                </select>
+                <button type="button" class="btn" id="todo-add-btn">添加</button>
+            </div>
+            <div class="todo-sort-row">
+                <span class="todo-sort-label">排序：</span>
+                <button type="button" class="todo-sort-btn active" data-sort="time">按时间</button>
+                <button type="button" class="todo-sort-btn" data-sort="name">按名称</button>
+                <button type="button" class="todo-sort-btn" data-sort="priority">按优先级</button>
+            </div>
+            <ul class="todo-list" id="todo-list"></ul>
+            <p class="todo-empty" id="todo-empty" style="display:none">暂无待办事项，添加一条吧。</p>
+            <p class="todo-error" id="todo-error" style="display:none"></p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+    <script src="/js/layout.js"></script>
+    <script src="/js/todo.js"></script>
+</body>
+</html>

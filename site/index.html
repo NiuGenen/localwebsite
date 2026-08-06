@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=7">
+    <link rel="stylesheet" href="/css/style.css?v=8">
 </head>
 <body>
     <header>
@@ -45,11 +45,29 @@
                 <p>在线阅读 Markdown 文件，支持表格和代码高亮。</p>
                 <a href="/reader.html" class="btn">开始阅读</a>
             </div>
+            <div class="card card-todo">
+                <div class="card-icon">✅</div>
+                <h3>待办事项</h3>
+                <p>记录和管理你的待办事项清单。</p>
+                <a href="/todo.html" class="btn">进入待办</a>
+            </div>
         </section>
     </main>
     <footer>
         <p>&copy; 2026 本地文件站</p>
     </footer>
     <script src="/js/layout.js"></script>
+    <script>
+    (function () {
+        var card = document.querySelector('.card-todo');
+        if (!card) return;
+        fetch('/api/local')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.local) card.style.display = 'none';
+            })
+            .catch(function () { card.style.display = 'none'; });
+    })();
+    </script>
 </body>
 </html>

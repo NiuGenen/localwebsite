@@ -1,3 +1,4 @@
 site/files/*
 !site/files/index.html
 __pycache__/
+site/todo.json
