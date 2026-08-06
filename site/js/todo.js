@@ -33,6 +33,7 @@
     }
 
     function setError(msg) {
+        if (msg && msg.message) msg = msg.message;
         if (msg) { errorEl.textContent = msg; errorEl.style.display = ''; }
         else { errorEl.style.display = 'none'; }
     }
@@ -51,16 +52,13 @@
         sorted.forEach(function (item) {
             var li = document.createElement('li');
             li.className = 'todo-item' + (item.done ? ' todo-done' : '');
+            li.__todoItem = item;
 
             var toggle = document.createElement('button');
             toggle.type = 'button';
             toggle.className = 'todo-toggle';
             toggle.title = item.done ? '标记为未完成' : '标记为完成';
             toggle.innerHTML = item.done ? '&#9745;' : '&#9744;';
-            toggle.addEventListener('click', function () {
-                item.done = !item.done;
-                apiUpdate(item.id, { done: item.done }).catch(function (e) { setError(e); });
-            });
             li.appendChild(toggle);
 
             var text = document.createElement('span');
@@ -73,28 +71,91 @@
             prio.className = 'todo-prio todo-prio-' + item.priority;
             prio.title = '点击调整优先级';
             prio.textContent = PRIORITY_LABEL[item.priority];
-            prio.addEventListener('click', function () {
-                var next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(item.priority) + 1) % PRIORITY_CYCLE.length];
-                item.priority = next;
-                prio.className = 'todo-prio todo-prio-' + item.priority;
-                prio.textContent = PRIORITY_LABEL[next];
-                apiUpdate(item.id, { priority: next }).catch(function (e) { setError(e); });
-            });
             li.appendChild(prio);
+
+            var edit = document.createElement('button');
+            edit.type = 'button';
+            edit.className = 'todo-edit';
+            edit.title = '编辑';
+            edit.innerHTML = '&#9998;';
+            li.appendChild(edit);
 
             var del = document.createElement('button');
             del.type = 'button';
             del.className = 'todo-delete';
             del.title = '删除';
             del.innerHTML = '&#10005;';
-            del.addEventListener('click', function () {
-                apiDelete(item.id).catch(function (e) { setError(e); });
-            });
             li.appendChild(del);
 
             listEl.appendChild(li);
         });
     }
+
+    function startEdit(li, item) {
+        var textEl = li.querySelector('.todo-text');
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.maxLength = 200;
+        input.className = 'todo-edit-input';
+        input.value = item.text;
+        textEl.replaceWith(input);
+
+        var editBtn = li.querySelector('.todo-edit');
+        editBtn.classList.add('todo-edit-confirm');
+        editBtn.title = '保存';
+        editBtn.innerHTML = '&#10003;';
+
+        var delBtn = li.querySelector('.todo-delete');
+        delBtn.classList.add('todo-delete-cancel');
+        delBtn.title = '取消';
+
+        li.classList.add('todo-editing');
+        input.focus();
+        input.select();
+    }
+
+    function saveEdit(li) {
+        var input = li.querySelector('.todo-edit-input');
+        var text = input.value.trim();
+        if (!text) { input.focus(); return; }
+        var item = li.__todoItem;
+        apiUpdate(item.id, { text: text }).catch(function (e) { setError(e); });
+    }
+
+    listEl.addEventListener('click', function (e) {
+        var btn = e.target.closest('button');
+        if (!btn || !listEl.contains(btn)) return;
+        var li = btn.closest('.todo-item');
+        if (!li) return;
+        var item = li.__todoItem;
+        if (!item) return;
+        var editing = li.classList.contains('todo-editing');
+
+        if (btn.classList.contains('todo-toggle')) {
+            if (editing) return;
+            item.done = !item.done;
+            apiUpdate(item.id, { done: item.done }).catch(function (err) { setError(err); });
+        } else if (btn.classList.contains('todo-prio')) {
+            if (editing) return;
+            var next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(item.priority) + 1) % PRIORITY_CYCLE.length];
+            item.priority = next;
+            btn.className = 'todo-prio todo-prio-' + item.priority;
+            btn.textContent = PRIORITY_LABEL[next];
+            apiUpdate(item.id, { priority: next }).catch(function (err) { setError(err); });
+        } else if (btn.classList.contains('todo-edit')) {
+            if (editing) {
+                saveEdit(li);
+            } else {
+                startEdit(li, item);
+            }
+        } else if (btn.classList.contains('todo-delete')) {
+            if (editing) {
+                reload();
+            } else {
+                apiDelete(item.id).catch(function (err) { setError(err); });
+            }
+        }
+    });
 
     function reload() {
         return fetch('/api/todo')

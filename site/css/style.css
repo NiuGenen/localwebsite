@@ -1042,6 +1042,50 @@ footer {
     background: #fdedec;
 }
 
+.todo-edit {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: #bbb;
+    font-size: 0.9rem;
+    width: 1.7rem;
+    height: 1.7rem;
+    line-height: 1;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+.todo-edit:hover {
+    color: #3498db;
+    border-color: #3498db;
+    background: #eef5fc;
+}
+.todo-edit-confirm {
+    color: #27ae60;
+    border-color: #27ae60;
+    background: #eafaf1;
+}
+.todo-delete-cancel {
+    color: #e74c3c;
+    border-color: #e74c3c;
+    background: #fdedec;
+}
+
+.todo-edit-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #e67e22;
+    border-radius: 4px;
+    font-size: 0.95rem;
+    box-sizing: border-box;
+}
+.todo-edit-input:focus {
+    outline: none;
+    border-color: #e67e22;
+    box-shadow: 0 0 0 2px rgba(230,126,34,0.15);
+}
+
 .todo-empty {
     text-align: center;
     color: #999;
