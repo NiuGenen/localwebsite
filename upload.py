@@ -10,8 +10,8 @@ app = Flask(__name__)
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# ===== 本机访问判定（本机 IP，IP 变更时改这里）=====
-LOCAL_IPS = {"127.0.0.1", "::1", "192.168.8.65"}
+# ===== 本机访问判定（仅回环地址）=====
+LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 
 # ===== 待办事项数据文件 =====
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
