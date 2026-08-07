@@ -47,7 +47,6 @@
     <script src="/js/highlight.min.js"></script>
     <script>
 (function () {
-    var mdDir = '/files/md/';
     var fileListEl = document.getElementById('file-list');
     var readingViewEl = document.getElementById('reading-view');
     var loadingEl = document.getElementById('reader-loading');
@@ -79,21 +78,14 @@
         hide(errorEl);
         fileListContainer.innerHTML = '<p style="color:#999;">正在扫描文件...</p>';
 
-        fetch(mdDir)
+        fetch('/api/files?path=md')
             .then(function (r) {
                 if (!r.ok) throw new Error('无法访问目录 (HTTP ' + r.status + ')');
-                return r.text();
+                return r.json();
             })
-            .then(function (html) {
-                var parser = new DOMParser();
-                var doc = parser.parseFromString(html, 'text/html');
-                var links = doc.querySelectorAll('pre a[href]');
-                var mdFiles = [];
-                links.forEach(function (a) {
-                    var href = a.getAttribute('href');
-                    if (/\.md$/i.test(href) && href !== '../') {
-                        mdFiles.push({ href: href, name: a.textContent || href });
-                    }
+            .then(function (data) {
+                var mdFiles = (data.entries || []).filter(function (e) {
+                    return e.type === 'file' && /\.md$/i.test(e.name);
                 });
                 if (mdFiles.length === 0) {
                     show(emptyEl);
@@ -106,7 +98,7 @@
                 mdFiles.forEach(function (f) {
                     var li = document.createElement('li');
                     var link = document.createElement('a');
-                    link.href = '/reader.html?path=' + encodeURIComponent(mdDir.replace(/^\/+/, '') + f.href.replace(/^\/+/, ''));
+                    link.href = '/reader.html?path=' + encodeURIComponent('files/md/' + f.name);
                     link.textContent = f.name;
                     link.className = 'md-file-link';
                     li.appendChild(link);
