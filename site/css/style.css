@@ -770,13 +770,14 @@ footer {
     white-space: nowrap;
 }
 .fb-col-op {
-    width: 5rem;
+    width: 7.5rem;
     text-align: center;
     white-space: nowrap;
 }
 
 .fb-cut-btn,
-.fb-rename-btn {
+.fb-rename-btn,
+.fb-read-btn {
     background: none;
     border: 1px solid #ccc;
     border-radius: 4px;
@@ -792,8 +793,9 @@ footer {
     justify-content: center;
     transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.fb-cut-btn + .fb-rename-btn,
-.fb-rename-btn + .fb-cut-btn {
+.fb-col-op a + a,
+.fb-col-op a + button,
+.fb-col-op button + button {
     margin-left: 0.3rem;
 }
 .fb-cut-btn:hover,
@@ -801,6 +803,12 @@ footer {
     background: #f0f4f8;
     color: #3498db;
     border-color: #3498db;
+}
+.fb-read-btn:hover {
+    background: #f0faf7;
+    color: #16a085;
+    border-color: #16a085;
+    text-decoration: none;
 }
 .fb-cut-btn:disabled,
 .fb-cut-btn[disabled],

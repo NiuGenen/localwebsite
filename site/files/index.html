@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=10">
+    <link rel="stylesheet" href="/css/style.css?v=11">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -207,6 +207,14 @@
         var opTd = document.createElement('td');
         opTd.className = 'fb-col-op';
         var opDisabled = currentBlocked || !!entry.blocked;
+        if (entry.type === 'file' && /\.md$/i.test(entry.name)) {
+            var readLink = document.createElement('a');
+            readLink.href = '/reader.html?path=' + encodeURIComponent('files/' + (path ? path + '/' : '') + entry.name);
+            readLink.className = 'fb-read-btn';
+            readLink.title = '在网站阅读';
+            readLink.innerHTML = '<i class="fas fa-book-open"></i>';
+            opTd.appendChild(readLink);
+        }
         var renameBtn = document.createElement('button');
         renameBtn.type = 'button';
         renameBtn.className = 'fb-rename-btn';
