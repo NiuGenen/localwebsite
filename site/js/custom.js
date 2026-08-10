@@ -41,6 +41,7 @@
     var pageId = null;
     var page = null;
     var currentPath = '';
+    var currentDocDir = '';
     var isLocal = false;
     var msgTimer = null;
 
@@ -88,15 +89,14 @@
         msgTimer = setTimeout(function () { hide(msgEl); }, 4000);
     }
 
-    // ===== marked 渲染器：相对路径加前缀 =====
+    // ===== marked 渲染器：相对路径加前缀（基准 = 当前文档所在目录）=====
     function setupRenderer() {
-        var base = 'custom/' + pageId + '/';
         function resolveUrl(href) {
             if (!href) return href;
             if (/^(https?:)?\/\//i.test(href)) return href;
             if (href.indexOf('data:') === 0) return href;
             if (href.charAt(0) === '#' || href.charAt(0) === '/') return href;
-            return '/' + base + href;
+            return '/' + currentDocDir + href;
         }
         marked.use({
             renderer: {
@@ -120,6 +120,7 @@
     // ===== 页面元数据 =====
     function renderDesc() {
         if (page && page.description) {
+            currentDocDir = 'custom/' + pageId + '/';
             renderHtml(descEl, page.description);
         } else {
             descEl.innerHTML = '';
@@ -410,12 +411,26 @@
                 return r.text();
             })
             .then(function (mdText) {
+                var slash = rel.lastIndexOf('/');
+                currentDocDir = 'custom/' + pageId + '/' + (slash >= 0 ? rel.slice(0, slash + 1) : '');
                 renderHtml(contentEl, mdText);
             })
             .catch(function (err) {
                 contentEl.innerHTML = '<p style="color:#c00;">加载文件失败: ' + err.message + '</p>';
             });
     }
+
+    // md 链接点击 → 在当前阅读视图打开
+    contentEl.addEventListener('click', function (e) {
+        var a = e.target.closest('a[href]');
+        if (!a) return;
+        var href = a.getAttribute('href');
+        var prefix = '/custom/' + pageId + '/';
+        if (href.indexOf(prefix) === 0 && /\.md$/i.test(href)) {
+            e.preventDefault();
+            openDoc(href.slice(prefix.length));
+        }
+    });
 
     backBtn.addEventListener('click', function () {
         hide(readingEl);
