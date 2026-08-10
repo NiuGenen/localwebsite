@@ -21,6 +21,8 @@ PRIORITIES = ("high", "medium", "low")
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 CUSTOM_PAGES_FILE = os.path.join(SITE_DIR, "custom_pages.json")
 CUSTOM_DIR = os.path.join(SITE_DIR, "custom")
+DOC_EXTS = {".md"}
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
 # ===== 禁止上传/创建的黑名单（相对 files/，前缀匹配）=====
 BLOCKED_PATHS = ["binary-translation"]
@@ -358,18 +360,36 @@ def find_page(page_id):
 def page_dir(page_id):
     return os.path.join(CUSTOM_DIR, page_id)
 
-def page_md_files(page_id):
-    d = page_dir(page_id)
-    if not os.path.isdir(d):
-        return []
-    names = []
-    for name in sorted(os.listdir(d)):
+def page_list_dir(base, rel):
+    """List entries under a page dir; returns (entries, rel_path) or (None, None) on bad path."""
+    if not rel or rel.strip() == "":
+        rel = ""
+    target = safe_join_soft(base, rel) if rel else base
+    if not target:
+        return None, None
+    if not os.path.isdir(target):
+        return None, None
+    entries = []
+    try:
+        names = sorted(os.listdir(target))
+    except OSError:
+        return None, None
+    for name in names:
         if name.startswith("."):
             continue
-        if os.path.isfile(os.path.join(d, name)) and name.lower().endswith(".md"):
-            st = os.stat(os.path.join(d, name))
-            names.append({"name": name, "size": st.st_size, "mtime": int(st.st_mtime)})
-    return names
+        full = os.path.join(target, name)
+        try:
+            st = os.stat(full)
+            is_dir = os.path.isdir(full)
+            entries.append({
+                "name": name,
+                "type": "dir" if is_dir else "file",
+                "size": st.st_size if not is_dir else 0,
+                "mtime": int(st.st_mtime)
+            })
+        except OSError:
+            pass
+    return entries, rel
 
 def require_local():
     if not is_local_client():
@@ -452,11 +472,15 @@ def api_pages_delete(page_id):
         shutil.rmtree(d, ignore_errors=True)
     return jsonify({"success": True})
 
-@app.route("/api/pages/<page_id>/files", methods=["GET"])
-def api_pages_files(page_id):
+@app.route("/api/pages/<page_id>/tree", methods=["GET"])
+def api_pages_tree(page_id):
     if not find_page(page_id):
         return jsonify({"error": "页面不存在"}), 404
-    return jsonify({"files": page_md_files(page_id)})
+    rel = request.args.get("path", "").strip().strip("/")
+    entries, rel = page_list_dir(page_dir(page_id), rel)
+    if entries is None:
+        return jsonify({"error": "无效的路径"}), 400
+    return jsonify({"entries": entries, "path": rel})
 
 @app.route("/api/pages/<page_id>/upload", methods=["POST"])
 def api_pages_upload(page_id):
@@ -468,21 +492,85 @@ def api_pages_upload(page_id):
     if not files:
         return jsonify({"error": "未选择文件"}), 400
 
+    rel = request.form.get("path", "").strip().strip("/")
     d = page_dir(page_id)
-    os.makedirs(d, exist_ok=True)
+    target = safe_join_soft(d, rel) if rel else d
+    if not target:
+        return jsonify({"error": "无效的目录路径"}), 400
+    if not os.path.isdir(target):
+        return jsonify({"error": "目标目录不存在"}), 400
+
+    allowed = DOC_EXTS | IMAGE_EXTS
     saved = []
     for f in files:
         if not f.filename:
             continue
         if os.path.basename(f.filename) != f.filename:
             return jsonify({"error": f"非法的文件名: {f.filename}"}), 400
-        if not f.filename.lower().endswith(".md"):
-            return jsonify({"error": f"仅支持上传 .md 文件: {f.filename}"}), 400
-        f.save(os.path.join(d, f.filename))
+        ext = os.path.splitext(f.filename)[1].lower()
+        if ext not in allowed:
+            return jsonify({"error": f"不支持的文件类型: {f.filename}"}), 400
+        f.save(os.path.join(target, f.filename))
         saved.append(f.filename)
     if not saved:
         return jsonify({"error": "未选择文件"}), 400
     return jsonify({"success": True, "names": saved})
+
+@app.route("/api/pages/<page_id>/mkdir", methods=["POST"])
+def api_pages_mkdir(page_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    if not find_page(page_id):
+        return jsonify({"error": "页面不存在"}), 404
+    data = request.get_json() or {}
+    rel = (data.get("path") or "").strip().strip("/")
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"error": "文件夹名称不能为空"}), 400
+    if not safe_leaf_name(name):
+        return jsonify({"error": "名称包含非法字符"}), 400
+
+    d = page_dir(page_id)
+    parent = safe_join_soft(d, rel) if rel else d
+    if not parent:
+        return jsonify({"error": "无效的目录路径"}), 400
+    new_dir = os.path.normpath(os.path.join(parent, name))
+    base_str = d.rstrip("/") + "/"
+    if not new_dir.startswith(base_str):
+        return jsonify({"error": "无效的路径"}), 400
+    if os.path.lexists(new_dir):
+        return jsonify({"error": "已存在同名目录或文件"}), 400
+    try:
+        os.makedirs(new_dir)
+        return jsonify({"success": True, "path": os.path.relpath(new_dir, d) if rel else name})
+    except Exception as e:
+        return jsonify({"error": f"创建失败: {e}"}), 500
+
+@app.route("/api/pages/<page_id>/delete", methods=["POST"])
+def api_pages_delete_entry(page_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    if not find_page(page_id):
+        return jsonify({"error": "页面不存在"}), 404
+    data = request.get_json() or {}
+    rel = (data.get("path") or "").strip().strip("/")
+    if not rel:
+        return jsonify({"error": "路径不能为空"}), 400
+
+    d = page_dir(page_id)
+    target = safe_join_soft(d, rel)
+    if not target or target == d:
+        return jsonify({"error": "无效的路径"}), 400
+    if not os.path.lexists(target):
+        return jsonify({"error": "目标不存在"}), 404
+    try:
+        if os.path.isdir(target) and not os.path.islink(target):
+            shutil.rmtree(target)
+        else:
+            os.remove(target)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"error": f"删除失败: {e}"}), 500
 
 
 if __name__ == "__main__":

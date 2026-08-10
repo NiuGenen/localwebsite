@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>自定义页面 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=10">
+    <link rel="stylesheet" href="/css/style.css?v=12">
 </head>
 <body>
     <header>
@@ -29,23 +29,40 @@
                 <div id="custom-desc"></div>
             </div>
 
-            <div id="custom-files" class="custom-files">
-                <div class="custom-files-head">
-                    <h3>文档清单</h3>
-                    <div class="custom-upload" id="custom-upload" style="display:none">
-                        <input type="file" id="custom-file-input" multiple accept=".md" style="display:none">
-                        <button type="button" class="btn btn-sm fb-action-btn" id="custom-upload-btn" title="上传 markdown 文件">上传文件</button>
+            <div class="fb-panel" id="custom-files">
+                <div class="fb-toolbar">
+                    <div class="fb-toolbar-left">
+                        <span class="fb-path" id="fb-path"></span>
+                        <span class="fb-count" id="fb-count"></span>
+                    </div>
+                    <div class="fb-actions" id="fb-actions" style="display:none">
+                        <button type="button" class="btn btn-sm fb-action-btn" id="custom-upload-doc" title="上传 markdown 文档">上传文档</button>
+                        <button type="button" class="btn btn-sm fb-action-btn" id="custom-upload-img" title="上传图片（png/jpg/gif/webp/bmp）">上传图片</button>
+                        <button type="button" class="btn btn-sm btn-success fb-action-btn" id="custom-mkdir-btn" title="在当前目录新建文件夹">新建文件夹</button>
+                        <input type="file" id="custom-doc-input" multiple accept=".md" style="display:none">
+                        <input type="file" id="custom-img-input" multiple accept="image/png,image/jpeg,image/gif,image/webp,image/bmp" style="display:none">
                     </div>
                 </div>
                 <div id="custom-upload-msg" class="fb-msg" style="display:none"></div>
-                <ul class="md-file-items" id="custom-file-list"></ul>
-                <p class="custom-empty" id="custom-empty" style="display:none">此页面暂无 markdown 文件</p>
-                <p class="custom-loading" id="custom-loading">加载文件清单...</p>
+                <div id="custom-loading" class="fb-loading">加载文件清单...</div>
+                <table class="fb-table" id="custom-table" style="display:none">
+                    <thead>
+                        <tr>
+                            <th class="fb-col-icon"></th>
+                            <th class="fb-col-name">名称</th>
+                            <th class="fb-col-size">大小</th>
+                            <th class="fb-col-date">修改时间</th>
+                            <th class="fb-col-op">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="custom-tbody"></tbody>
+                </table>
+                <div id="custom-empty" class="fb-empty" style="display:none">此目录为空</div>
             </div>
 
             <div id="custom-reading" style="display:none">
                 <div id="reader-toolbar">
-                    <button type="button" class="btn" id="custom-back-btn">← 文档清单</button>
+                    <button type="button" class="btn" id="custom-back-btn">← 返回文件</button>
                     <span id="reader-filename"></span>
                 </div>
                 <div id="reader-content"></div>
@@ -60,7 +77,7 @@
 
     <div class="fb-modal-overlay" id="custom-modal" style="display:none">
         <div class="fb-modal fb-modal-lg">
-            <h3 class="fb-modal-title" id="custom-modal-title">编辑页面</h3>
+            <h3 class="fb-modal-title">编辑页面</h3>
             <input type="text" id="custom-modal-title-input" class="fb-modal-input" placeholder="页面标题" maxlength="100">
             <textarea id="custom-modal-desc-input" class="fb-modal-textarea" placeholder="内容简介（支持 Markdown 语法）" maxlength="2000"></textarea>
             <p class="fb-modal-hint" id="custom-modal-hint"></p>
@@ -71,9 +88,21 @@
         </div>
     </div>
 
+    <div class="fb-modal-overlay" id="custom-mkdir-modal" style="display:none">
+        <div class="fb-modal">
+            <h3 class="fb-modal-title">新建文件夹</h3>
+            <input type="text" id="custom-mkdir-input" class="fb-modal-input" placeholder="输入文件夹名称">
+            <p class="fb-modal-hint" id="custom-mkdir-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="custom-mkdir-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="custom-mkdir-confirm">创建</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/marked.min.js"></script>
     <script src="/js/highlight.min.js"></script>
     <script src="/js/layout.js"></script>
-    <script src="/js/custom.js?v=1"></script>
+    <script src="/js/custom.js?v=4"></script>
 </body>
 </html>
