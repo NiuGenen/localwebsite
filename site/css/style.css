@@ -1217,6 +1217,9 @@ footer {
 .card-pinned {
     border-top-color: #16a085;
 }
+.card-pinned p {
+    white-space: pre-line;
+}
 
 .btn-danger {
     background: #e74c3c;

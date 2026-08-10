@@ -2,11 +2,6 @@
     var container = document.getElementById('pinned-cards');
     if (!container) return;
 
-    function snippet(text) {
-        var t = (text || '').replace(/[#*_`>~\[\]()!-]/g, ' ').replace(/\s+/g, ' ').trim();
-        return t.length > 80 ? t.slice(0, 80) + '…' : t;
-    }
-
     fetch('/api/pages')
         .then(function (r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -27,7 +22,7 @@
                 h3.textContent = p.title;
 
                 var para = document.createElement('p');
-                para.textContent = snippet(p.description) || '（无简介）';
+                para.textContent = (p.description && p.description.trim()) || '（无简介）';
 
                 var btn = document.createElement('a');
                 btn.href = '/custom.html?id=' + encodeURIComponent(p.id);
