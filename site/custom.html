@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义页面 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=10">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <div id="custom-app" style="display:none">
+            <div class="custom-head" id="custom-head">
+                <div class="custom-head-top">
+                    <h2 id="custom-title"></h2>
+                    <div class="custom-manage" id="custom-manage" style="display:none">
+                        <button type="button" class="btn btn-sm fb-action-btn" id="custom-edit-btn" title="修改标题和简介">编辑</button>
+                        <button type="button" class="btn btn-sm btn-danger fb-action-btn" id="custom-delete-btn" title="删除此页面">删除</button>
+                    </div>
+                </div>
+                <div id="custom-desc"></div>
+            </div>
+
+            <div id="custom-files" class="custom-files">
+                <div class="custom-files-head">
+                    <h3>文档清单</h3>
+                    <div class="custom-upload" id="custom-upload" style="display:none">
+                        <input type="file" id="custom-file-input" multiple accept=".md" style="display:none">
+                        <button type="button" class="btn btn-sm fb-action-btn" id="custom-upload-btn" title="上传 markdown 文件">上传文件</button>
+                    </div>
+                </div>
+                <div id="custom-upload-msg" class="fb-msg" style="display:none"></div>
+                <ul class="md-file-items" id="custom-file-list"></ul>
+                <p class="custom-empty" id="custom-empty" style="display:none">此页面暂无 markdown 文件</p>
+                <p class="custom-loading" id="custom-loading">加载文件清单...</p>
+            </div>
+
+            <div id="custom-reading" style="display:none">
+                <div id="reader-toolbar">
+                    <button type="button" class="btn" id="custom-back-btn">← 文档清单</button>
+                    <span id="reader-filename"></span>
+                </div>
+                <div id="reader-content"></div>
+            </div>
+        </div>
+
+        <div class="custom-error" id="custom-error" style="display:none"></div>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <div class="fb-modal-overlay" id="custom-modal" style="display:none">
+        <div class="fb-modal fb-modal-lg">
+            <h3 class="fb-modal-title" id="custom-modal-title">编辑页面</h3>
+            <input type="text" id="custom-modal-title-input" class="fb-modal-input" placeholder="页面标题" maxlength="100">
+            <textarea id="custom-modal-desc-input" class="fb-modal-textarea" placeholder="内容简介（支持 Markdown 语法）" maxlength="2000"></textarea>
+            <p class="fb-modal-hint" id="custom-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="custom-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="custom-modal-confirm">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/marked.min.js"></script>
+    <script src="/js/highlight.min.js"></script>
+    <script src="/js/layout.js"></script>
+    <script src="/js/custom.js?v=1"></script>
+</body>
+</html>

@@ -17,6 +17,11 @@ LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
 PRIORITIES = ("high", "medium", "low")
 
+# ===== 自定义页面数据 =====
+SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
+CUSTOM_PAGES_FILE = os.path.join(SITE_DIR, "custom_pages.json")
+CUSTOM_DIR = os.path.join(SITE_DIR, "custom")
+
 # ===== 禁止上传/创建的黑名单（相对 files/，前缀匹配）=====
 BLOCKED_PATHS = ["binary-translation"]
 
@@ -246,10 +251,13 @@ def api_rename():
 
 # ===== 本机判定 API =====
 
+def is_local_client():
+    client = request.headers.get("X-Real-IP", "") or request.remote_addr or ""
+    return client in LOCAL_IPS
+
 @app.route("/api/local")
 def api_local():
-    client = request.headers.get("X-Real-IP", "") or request.remote_addr or ""
-    return jsonify({"local": client in LOCAL_IPS})
+    return jsonify({"local": is_local_client()})
 
 # ===== 待办事项 API =====
 
@@ -324,6 +332,157 @@ def api_todo_delete(todo_id):
         return jsonify({"error": "待办事项不存在"}), 404
     save_todos(new_todos)
     return jsonify({"success": True})
+
+# ===== 自定义页面 API =====
+
+def load_pages():
+    try:
+        with open(CUSTOM_PAGES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_pages(pages):
+    tmp = CUSTOM_PAGES_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(pages, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, CUSTOM_PAGES_FILE)
+
+def find_page(page_id):
+    for p in load_pages():
+        if p["id"] == page_id:
+            return p
+    return None
+
+def page_dir(page_id):
+    return os.path.join(CUSTOM_DIR, page_id)
+
+def page_md_files(page_id):
+    d = page_dir(page_id)
+    if not os.path.isdir(d):
+        return []
+    names = []
+    for name in sorted(os.listdir(d)):
+        if name.startswith("."):
+            continue
+        if os.path.isfile(os.path.join(d, name)) and name.lower().endswith(".md"):
+            st = os.stat(os.path.join(d, name))
+            names.append({"name": name, "size": st.st_size, "mtime": int(st.st_mtime)})
+    return names
+
+def require_local():
+    if not is_local_client():
+        return False
+    return True
+
+@app.route("/api/pages", methods=["GET"])
+def api_pages_list():
+    pages = load_pages()
+    pages.sort(key=lambda p: p.get("created", 0), reverse=True)
+    return jsonify(pages)
+
+@app.route("/api/pages", methods=["POST"])
+def api_pages_create():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+    if len(title) > 100:
+        return jsonify({"error": "标题过长"}), 400
+    if len(description) > 2000:
+        return jsonify({"error": "简介过长"}), 400
+
+    page_id = uuid.uuid4().hex[:12]
+    os.makedirs(page_dir(page_id), exist_ok=True)
+    page = {
+        "id": page_id,
+        "title": title,
+        "description": description,
+        "created": int(time.time()),
+    }
+    pages = load_pages()
+    pages.append(page)
+    save_pages(pages)
+    return jsonify(page), 201
+
+@app.route("/api/pages/<page_id>", methods=["PUT"])
+def api_pages_update(page_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    page = find_page(page_id)
+    if not page:
+        return jsonify({"error": "页面不存在"}), 404
+    data = request.get_json() or {}
+    if "title" in data:
+        title = (data["title"] or "").strip()
+        if not title:
+            return jsonify({"error": "标题不能为空"}), 400
+        if len(title) > 100:
+            return jsonify({"error": "标题过长"}), 400
+        page["title"] = title
+    if "description" in data:
+        description = (data.get("description") or "").strip()
+        if len(description) > 2000:
+            return jsonify({"error": "简介过长"}), 400
+        page["description"] = description
+    pages = load_pages()
+    for i, p in enumerate(pages):
+        if p["id"] == page_id:
+            pages[i] = page
+            break
+    save_pages(pages)
+    return jsonify(page)
+
+@app.route("/api/pages/<page_id>", methods=["DELETE"])
+def api_pages_delete(page_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    page = find_page(page_id)
+    if not page:
+        return jsonify({"error": "页面不存在"}), 404
+    pages = load_pages()
+    new_pages = [p for p in pages if p["id"] != page_id]
+    save_pages(new_pages)
+    d = page_dir(page_id)
+    if os.path.isdir(d):
+        shutil.rmtree(d, ignore_errors=True)
+    return jsonify({"success": True})
+
+@app.route("/api/pages/<page_id>/files", methods=["GET"])
+def api_pages_files(page_id):
+    if not find_page(page_id):
+        return jsonify({"error": "页面不存在"}), 404
+    return jsonify({"files": page_md_files(page_id)})
+
+@app.route("/api/pages/<page_id>/upload", methods=["POST"])
+def api_pages_upload(page_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    if not find_page(page_id):
+        return jsonify({"error": "页面不存在"}), 404
+    files = request.files.getlist("file")
+    if not files:
+        return jsonify({"error": "未选择文件"}), 400
+
+    d = page_dir(page_id)
+    os.makedirs(d, exist_ok=True)
+    saved = []
+    for f in files:
+        if not f.filename:
+            continue
+        if os.path.basename(f.filename) != f.filename:
+            return jsonify({"error": f"非法的文件名: {f.filename}"}), 400
+        if not f.filename.lower().endswith(".md"):
+            return jsonify({"error": f"仅支持上传 .md 文件: {f.filename}"}), 400
+        f.save(os.path.join(d, f.filename))
+        saved.append(f.filename)
+    if not saved:
+        return jsonify({"error": "未选择文件"}), 400
+    return jsonify({"success": True, "names": saved})
 
 
 if __name__ == "__main__":
