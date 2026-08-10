@@ -422,6 +422,7 @@ def api_pages_create():
         "id": page_id,
         "title": title,
         "description": description,
+        "pinned": False,
         "created": int(time.time()),
     }
     pages = load_pages()
@@ -449,6 +450,8 @@ def api_pages_update(page_id):
         if len(description) > 2000:
             return jsonify({"error": "简介过长"}), 400
         page["description"] = description
+    if "pinned" in data:
+        page["pinned"] = bool(data["pinned"])
     pages = load_pages()
     for i, p in enumerate(pages):
         if p["id"] == page_id:

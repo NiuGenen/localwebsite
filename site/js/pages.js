@@ -10,9 +10,44 @@
     var modalConfirm = document.getElementById('page-modal-confirm');
     var modalCancel = document.getElementById('page-modal-cancel');
 
+    var isLocal = false;
+
     function snippet(text) {
         var t = (text || '').replace(/[#*_`>~\[\]()!-]/g, ' ').replace(/\s+/g, ' ').trim();
         return t.length > 80 ? t.slice(0, 80) + '…' : t;
+    }
+
+    function updatePinBtn(btn, pinned) {
+        btn.textContent = pinned ? '从首页取消' : '添加到首页';
+        btn.classList.toggle('pinned', !!pinned);
+        btn.title = pinned ? '将该页面从首页移除' : '将该页面添加到首页';
+    }
+
+    function makePinBtn(page) {
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'page-pin-btn' + (page.pinned ? ' pinned' : '');
+        updatePinBtn(btn, !!page.pinned);
+        btn.addEventListener('click', function () {
+            btn.disabled = true;
+            fetch('/api/pages/' + encodeURIComponent(page.id), {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pinned: !page.pinned })
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.id) {
+                        page.pinned = !!d.pinned;
+                        updatePinBtn(btn, page.pinned);
+                    } else {
+                        alert('操作失败: ' + (d.error || '未知错误'));
+                    }
+                })
+                .catch(function () { alert('网络错误'); })
+                .finally(function () { btn.disabled = false; });
+        });
+        return btn;
     }
 
     function loadPages() {
@@ -31,9 +66,12 @@
                     return;
                 }
                 pages.forEach(function (p) {
+                    var wrap = document.createElement('div');
+                    wrap.className = 'page-entry';
+
                     var a = document.createElement('a');
                     a.href = '/custom.html?id=' + encodeURIComponent(p.id);
-                    a.className = 'page-entry';
+                    a.className = 'page-entry-link';
                     var title = document.createElement('div');
                     title.className = 'page-entry-title';
                     title.textContent = p.title;
@@ -42,7 +80,13 @@
                     desc.textContent = snippet(p.description) || '（无简介）';
                     a.appendChild(title);
                     a.appendChild(desc);
-                    gridEl.appendChild(a);
+                    wrap.appendChild(a);
+
+                    if (isLocal) {
+                        wrap.appendChild(makePinBtn(p));
+                    }
+
+                    gridEl.appendChild(wrap);
                 });
             })
             .catch(function (err) {
@@ -53,7 +97,10 @@
 
     fetch('/api/local')
         .then(function (r) { return r.json(); })
-        .then(function (d) { if (d.local) createBtn.style.display = ''; })
+        .then(function (d) {
+            isLocal = !!d.local;
+            if (isLocal) createBtn.style.display = '';
+        })
         .catch(function () {});
 
     function openModal() {

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=11">
+    <link rel="stylesheet" href="/css/style.css?v=13">
 </head>
 <body>
     <header>
@@ -57,6 +57,7 @@
                 <p>将相关的 Markdown 文档组织成独立阅读页面。</p>
                 <a href="/pages.html" class="btn">进入页面</a>
             </div>
+            <div id="pinned-cards"></div>
         </section>
     </main>
     <footer>
@@ -64,6 +65,7 @@
     </footer>
 
     <script src="/js/layout.js"></script>
+    <script src="/js/pinned.js"></script>
     <script>
     (function () {
         var card = document.querySelector('.card-todo');
