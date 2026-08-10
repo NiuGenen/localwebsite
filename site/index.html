@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=10">
+    <link rel="stylesheet" href="/css/style.css?v=11">
 </head>
 <body>
     <header>
@@ -52,13 +52,10 @@
                 <a href="/todo.html" class="btn">进入待办</a>
             </div>
             <div class="card card-pages">
-                <div class="card-pages-head">
-                    <h3>自定义页面</h3>
-                    <button type="button" class="btn btn-sm btn-success" id="page-create-btn" style="display:none">创建页面</button>
-                </div>
-                <div class="page-grid" id="page-grid"></div>
-                <p class="page-loading" id="page-loading">加载自定义页面...</p>
-                <p class="page-empty" id="page-empty" style="display:none">暂无自定义页面</p>
+                <div class="card-icon">📄</div>
+                <h3>自定义页面</h3>
+                <p>将相关的 Markdown 文档组织成独立阅读页面。</p>
+                <a href="/pages.html" class="btn">进入页面</a>
             </div>
         </section>
     </main>
@@ -66,21 +63,7 @@
         <p>&copy; 2026 本地文件站</p>
     </footer>
 
-    <div class="fb-modal-overlay" id="page-modal" style="display:none">
-        <div class="fb-modal fb-modal-lg">
-            <h3 class="fb-modal-title">创建页面</h3>
-            <input type="text" id="page-modal-title" class="fb-modal-input" placeholder="页面标题" maxlength="100">
-            <textarea id="page-modal-desc" class="fb-modal-textarea" placeholder="内容简介（支持 Markdown 语法）" maxlength="2000"></textarea>
-            <p class="fb-modal-hint" id="page-modal-hint"></p>
-            <div class="fb-modal-actions">
-                <button type="button" class="btn" id="page-modal-cancel">取消</button>
-                <button type="button" class="btn btn-success" id="page-modal-confirm">创建</button>
-            </div>
-        </div>
-    </div>
-
     <script src="/js/layout.js"></script>
-    <script src="/js/pages.js"></script>
     <script>
     (function () {
         var card = document.querySelector('.card-todo');

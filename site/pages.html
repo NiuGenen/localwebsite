@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义页面 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=11">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="pages-intro">
+            <h2>自定义页面</h2>
+            <p>本网站提供 Markdown 文档的在线阅读功能。你可以创建自定义页面，把若干相关的 Markdown 文档组织到同一个页面里，集中阅读、统一管理。</p>
+        </section>
+        <section class="card card-pages">
+            <div class="card-pages-head">
+                <h3>全部页面</h3>
+                <button type="button" class="btn btn-sm btn-success" id="page-create-btn" style="display:none">创建页面</button>
+            </div>
+            <div class="page-grid" id="page-grid"></div>
+            <p class="page-loading" id="page-loading">加载自定义页面...</p>
+            <p class="page-empty" id="page-empty" style="display:none">暂无自定义页面，点击右上角「创建页面」开始。</p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <div class="fb-modal-overlay" id="page-modal" style="display:none">
+        <div class="fb-modal fb-modal-lg">
+            <h3 class="fb-modal-title">创建页面</h3>
+            <input type="text" id="page-modal-title" class="fb-modal-input" placeholder="页面标题" maxlength="100">
+            <textarea id="page-modal-desc" class="fb-modal-textarea" placeholder="内容简介（支持 Markdown 语法）" maxlength="2000"></textarea>
+            <p class="fb-modal-hint" id="page-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="page-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="page-modal-confirm">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/pages.js"></script>
+</body>
+</html>

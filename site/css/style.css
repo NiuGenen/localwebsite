@@ -1112,7 +1112,6 @@ footer {
 
 /* ===== Custom Pages ===== */
 .card-pages {
-    grid-column: 1 / -1;
     border-top-color: #16a085;
 }
 .card-pages-head {
@@ -1123,6 +1122,23 @@ footer {
 }
 .card-pages-head h3 {
     margin: 0;
+}
+.pages-intro {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 1.75rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+.pages-intro h2 {
+    color: #2c3e50;
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+}
+.pages-intro p {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.7;
 }
 .page-loading,
 .page-empty {
