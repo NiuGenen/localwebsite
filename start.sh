@@ -9,9 +9,9 @@ if [ ! -f "$NGINX_BIN" ]; then
     exit 1
 fi
 
-echo "Starting Flask upload backend on port 5000..."
-nohup "$VENV_PYTHON" "$DIR/upload.py" > /tmp/flask_upload.log 2>&1 &
-echo $! > /tmp/flask_upload.pid
+echo "Starting Flask backend on port 5000..."
+nohup "$VENV_PYTHON" "$DIR/backend.py" > /tmp/flask_backend.log 2>&1 &
+echo $! > /tmp/flask_backend.pid
 
 echo "Starting nginx on port 8080..."
 nohup "$NGINX_BIN" -c "$CONF" -p "$DIR" > /tmp/nginx_startup.log 2>&1 &
