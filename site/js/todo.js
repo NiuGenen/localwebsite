@@ -18,9 +18,19 @@
     var STATUS_CYCLE = { pending: 'in_progress', in_progress: 'paused', paused: 'pending' };
     var STATUS_LABEL = { pending: '开始', in_progress: '进行中', paused: '暂停' };
     var STATUS_TITLE = { pending: '标记为进行中', in_progress: '标记为暂停', paused: '重新开始' };
+    var GROUP_META = {
+        in_progress: { label: '进行中', icon: '⏳' },
+        paused: { label: '暂停', icon: '⏸' },
+        pending: { label: '未开始', icon: '📋' },
+        done: { label: '已完成', icon: '✅' }
+    };
 
     function getStatus(item) {
         return item.status || (item.in_progress ? 'in_progress' : 'pending');
+    }
+
+    function groupKey(item) {
+        return item.done ? 'done' : getStatus(item);
     }
 
     function getSorted() {
@@ -74,7 +84,21 @@
         }
         emptyEl.style.display = 'none';
 
+        var groupCounts = { in_progress: 0, paused: 0, pending: 0, done: 0 };
+        sorted.forEach(function (t) { groupCounts[groupKey(t)]++; });
+
+        var currentGroup = null;
         sorted.forEach(function (item) {
+            var gkey = groupKey(item);
+            if (gkey !== currentGroup) {
+                currentGroup = gkey;
+                var meta = GROUP_META[gkey];
+                var header = document.createElement('li');
+                header.className = 'todo-group-header';
+                header.textContent = meta.icon + ' ' + meta.label + ' · ' + groupCounts[gkey];
+                listEl.appendChild(header);
+            }
+
             var li = document.createElement('li');
             var status = getStatus(item);
             var statusClass = status === 'in_progress' ? ' todo-inprogress' : (status === 'paused' ? ' todo-paused' : '');
