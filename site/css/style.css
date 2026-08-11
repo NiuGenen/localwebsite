@@ -1056,6 +1056,16 @@ footer {
     border-color: #2980b9;
     color: #fff;
 }
+.todo-progress-paused {
+    background: #f39c12;
+    border-color: #f39c12;
+    color: #fff;
+}
+.todo-progress-paused:hover {
+    background: #e67e22;
+    border-color: #e67e22;
+    color: #fff;
+}
 .todo-done .todo-progress {
     display: none;
 }
@@ -1066,6 +1076,14 @@ footer {
 }
 .todo-inprogress .todo-text {
     color: #1a5276;
+}
+.todo-paused {
+    background: #fef9f0;
+    border-left: 3px solid #f39c12;
+    padding-left: 0.6rem;
+}
+.todo-paused .todo-text {
+    color: #8c6d1f;
 }
 
 .todo-delete {

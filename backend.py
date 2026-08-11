@@ -16,6 +16,7 @@ LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 # ===== 待办事项数据文件 =====
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
 PRIORITIES = ("high", "medium", "low")
+TODO_STATUSES = {"pending", "in_progress", "paused"}
 
 # ===== 自定义页面数据 =====
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
@@ -267,7 +268,12 @@ def load_todos():
     try:
         with open(TODO_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
-            return data if isinstance(data, list) else []
+            if not isinstance(data, list):
+                return []
+            for it in data:
+                if "status" not in it:
+                    it["status"] = "in_progress" if it.get("in_progress") else "pending"
+            return data
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return []
 
@@ -297,7 +303,7 @@ def api_todo_add():
         "text": text,
         "priority": priority,
         "done": False,
-        "in_progress": False,
+        "status": "pending",
         "created": int(time.time()),
         "updated": int(time.time()),
     }
@@ -323,9 +329,9 @@ def api_todo_update(todo_id):
             if "done" in data:
                 it["done"] = bool(data["done"])
                 if it["done"]:
-                    it["in_progress"] = False
-            if "in_progress" in data:
-                it["in_progress"] = bool(data["in_progress"])
+                    it["status"] = "pending"
+            if "status" in data and data["status"] in TODO_STATUSES:
+                it["status"] = data["status"]
             it["updated"] = int(time.time())
             save_todos(todos)
             return jsonify(it)

@@ -15,9 +15,16 @@
     var PRIORITY_LABEL = { high: '高', medium: '中', low: '低' };
     var PRIORITY_CYCLE = ['high', 'medium', 'low'];
 
+    var STATUS_CYCLE = { pending: 'in_progress', in_progress: 'paused', paused: 'pending' };
+    var STATUS_LABEL = { pending: '开始', in_progress: '进行中', paused: '暂停' };
+    var STATUS_TITLE = { pending: '标记为进行中', in_progress: '标记为暂停', paused: '重新开始' };
+
+    function getStatus(item) {
+        return item.status || (item.in_progress ? 'in_progress' : 'pending');
+    }
+
     function getSorted() {
         var done = todos.filter(function (t) { return t.done; });
-        var active = todos.filter(function (t) { return !t.done; });
         var cmp;
         if (sortMode === 'name') {
             cmp = function (a, b) { return a.text.localeCompare(b.text, 'zh'); };
@@ -29,9 +36,17 @@
         } else {
             cmp = function (a, b) { return b.created - a.created; };
         }
-        var inProgress = active.filter(function (t) { return !!t.in_progress; }).sort(cmp);
-        var pending = active.filter(function (t) { return !t.in_progress; }).sort(cmp);
-        return inProgress.concat(pending, done.sort(cmp));
+        var inProgress = [];
+        var paused = [];
+        var pending = [];
+        todos.forEach(function (t) {
+            if (t.done) return;
+            var s = getStatus(t);
+            if (s === 'in_progress') inProgress.push(t);
+            else if (s === 'paused') paused.push(t);
+            else pending.push(t);
+        });
+        return inProgress.sort(cmp).concat(paused.sort(cmp), pending.sort(cmp), done.sort(cmp));
     }
 
     function setError(msg) {
@@ -43,9 +58,16 @@
     function render() {
         listEl.innerHTML = '';
         var sorted = getSorted();
-        var pending = todos.filter(function (t) { return !t.done; }).length;
-        var inProgress = todos.filter(function (t) { return !t.done && !!t.in_progress; }).length;
-        countEl.textContent = todos.length + ' 项（未完成 ' + pending + '，进行中 ' + inProgress + '）';
+        var pendingCount = todos.filter(function (t) { return !t.done; }).length;
+        var inProgressCount = 0;
+        var pausedCount = 0;
+        todos.forEach(function (t) {
+            if (t.done) return;
+            var s = getStatus(t);
+            if (s === 'in_progress') inProgressCount++;
+            else if (s === 'paused') pausedCount++;
+        });
+        countEl.textContent = todos.length + ' 项（未完成 ' + pendingCount + '，进行中 ' + inProgressCount + '，暂停 ' + pausedCount + '）';
         if (sorted.length === 0) {
             emptyEl.style.display = '';
             return;
@@ -54,7 +76,9 @@
 
         sorted.forEach(function (item) {
             var li = document.createElement('li');
-            li.className = 'todo-item' + (item.done ? ' todo-done' : '') + (item.in_progress ? ' todo-inprogress' : '');
+            var status = getStatus(item);
+            var statusClass = status === 'in_progress' ? ' todo-inprogress' : (status === 'paused' ? ' todo-paused' : '');
+            li.className = 'todo-item' + (item.done ? ' todo-done' : '') + statusClass;
             li.__todoItem = item;
 
             var toggle = document.createElement('button');
@@ -66,9 +90,9 @@
 
             var progress = document.createElement('button');
             progress.type = 'button';
-            progress.className = 'todo-progress' + (item.in_progress ? ' todo-progress-active' : '');
-            progress.title = item.in_progress ? '标记为未进行中' : '标记为进行中';
-            progress.textContent = item.in_progress ? '进行中' : '开始';
+            progress.className = 'todo-progress' + (status === 'in_progress' ? ' todo-progress-active' : (status === 'paused' ? ' todo-progress-paused' : ''));
+            progress.title = STATUS_TITLE[status];
+            progress.textContent = STATUS_LABEL[status];
             li.appendChild(progress);
 
             var text = document.createElement('span');
@@ -145,16 +169,17 @@
             if (editing) return;
             item.done = !item.done;
             var patch = { done: item.done };
-            if (item.done) { item.in_progress = false; patch.in_progress = false; }
+            if (item.done) { item.status = 'pending'; patch.status = 'pending'; }
             apiUpdate(item.id, patch).catch(function (err) { setError(err); });
         } else if (btn.classList.contains('todo-progress')) {
             if (editing || item.done) return;
-            item.in_progress = !item.in_progress;
-            btn.classList.toggle('todo-progress-active', item.in_progress);
-            btn.textContent = item.in_progress ? '进行中' : '开始';
-            btn.title = item.in_progress ? '标记为未进行中' : '标记为进行中';
-            li.classList.toggle('todo-inprogress', item.in_progress);
-            apiUpdate(item.id, { in_progress: item.in_progress }).catch(function (err) { setError(err); });
+            var next = STATUS_CYCLE[getStatus(item)];
+            item.status = next;
+            li.className = 'todo-item' + (next === 'in_progress' ? ' todo-inprogress' : (next === 'paused' ? ' todo-paused' : ''));
+            btn.className = 'todo-progress' + (next === 'in_progress' ? ' todo-progress-active' : (next === 'paused' ? ' todo-progress-paused' : ''));
+            btn.textContent = STATUS_LABEL[next];
+            btn.title = STATUS_TITLE[next];
+            apiUpdate(item.id, { status: next }).catch(function (err) { setError(err); });
         } else if (btn.classList.contains('todo-prio')) {
             if (editing) return;
             var next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(item.priority) + 1) % PRIORITY_CYCLE.length];
