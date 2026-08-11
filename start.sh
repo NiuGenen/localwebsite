@@ -1,6 +1,6 @@
 #!/bin/bash
 DIR="$(dirname "$0")"
-NGINX_BIN=/tmp/nginx_install/extracted/usr/sbin/nginx
+NGINX_BIN="$HOME/nginx_install/usr/sbin/nginx"
 CONF="$DIR/nginx.conf"
 VENV_PYTHON="$DIR/venv/bin/python3"
 

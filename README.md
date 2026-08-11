@@ -65,7 +65,7 @@
 - **待办事项与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
 - 自定义页面/待办查看对所有局域网用户开放。
 
-> 注：本项目使用的 Nginx 位于 `/tmp/nginx_install/extracted/usr/sbin/nginx`，若该目录被系统清理，可用 `apt download nginx` 重新解压，或改用系统自带的 Nginx。
+> 注：本项目使用的 Nginx 位于 `~/nginx_install/usr/sbin/nginx`（由 `apt download nginx nginx-common nginx-core` 下载后用 `dpkg-deb -x` 解压到 home）。
 
 ## 配置说明
 
