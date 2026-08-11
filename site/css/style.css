@@ -1223,8 +1223,20 @@ footer {
     cursor: not-allowed;
 }
 
+#pinned-cards {
+    display: contents;
+}
+
 .card-pinned {
     border-top-color: #16a085;
+}
+
+.card-pinned p {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
 }
 
 .btn-danger {
