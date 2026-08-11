@@ -1031,6 +1031,43 @@ footer {
 .todo-prio-medium { background: #e67e22; }
 .todo-prio-low    { background: #27ae60; }
 
+.todo-progress {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: none;
+    color: #888;
+    font-size: 0.78rem;
+    padding: 0.18rem 0.5rem;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: all 0.15s;
+}
+.todo-progress:hover {
+    border-color: #3498db;
+    color: #3498db;
+}
+.todo-progress-active {
+    background: #3498db;
+    border-color: #3498db;
+    color: #fff;
+}
+.todo-progress-active:hover {
+    background: #2980b9;
+    border-color: #2980b9;
+    color: #fff;
+}
+.todo-done .todo-progress {
+    display: none;
+}
+.todo-inprogress {
+    background: #eef5fc;
+    border-left: 3px solid #3498db;
+    padding-left: 0.6rem;
+}
+.todo-inprogress .todo-text {
+    color: #1a5276;
+}
+
 .todo-delete {
     background: none;
     border: 1px solid transparent;

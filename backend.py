@@ -297,6 +297,7 @@ def api_todo_add():
         "text": text,
         "priority": priority,
         "done": False,
+        "in_progress": False,
         "created": int(time.time()),
         "updated": int(time.time()),
     }
@@ -321,6 +322,10 @@ def api_todo_update(todo_id):
                 it["priority"] = data["priority"]
             if "done" in data:
                 it["done"] = bool(data["done"])
+                if it["done"]:
+                    it["in_progress"] = False
+            if "in_progress" in data:
+                it["in_progress"] = bool(data["in_progress"])
             it["updated"] = int(time.time())
             save_todos(todos)
             return jsonify(it)

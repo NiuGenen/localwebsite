@@ -29,7 +29,9 @@
         } else {
             cmp = function (a, b) { return b.created - a.created; };
         }
-        return active.sort(cmp).concat(done.sort(cmp));
+        var inProgress = active.filter(function (t) { return !!t.in_progress; }).sort(cmp);
+        var pending = active.filter(function (t) { return !t.in_progress; }).sort(cmp);
+        return inProgress.concat(pending, done.sort(cmp));
     }
 
     function setError(msg) {
@@ -42,7 +44,8 @@
         listEl.innerHTML = '';
         var sorted = getSorted();
         var pending = todos.filter(function (t) { return !t.done; }).length;
-        countEl.textContent = todos.length + ' 项（未完成 ' + pending + '）';
+        var inProgress = todos.filter(function (t) { return !t.done && !!t.in_progress; }).length;
+        countEl.textContent = todos.length + ' 项（未完成 ' + pending + '，进行中 ' + inProgress + '）';
         if (sorted.length === 0) {
             emptyEl.style.display = '';
             return;
@@ -51,7 +54,7 @@
 
         sorted.forEach(function (item) {
             var li = document.createElement('li');
-            li.className = 'todo-item' + (item.done ? ' todo-done' : '');
+            li.className = 'todo-item' + (item.done ? ' todo-done' : '') + (item.in_progress ? ' todo-inprogress' : '');
             li.__todoItem = item;
 
             var toggle = document.createElement('button');
@@ -60,6 +63,13 @@
             toggle.title = item.done ? '标记为未完成' : '标记为完成';
             toggle.innerHTML = item.done ? '&#9745;' : '&#9744;';
             li.appendChild(toggle);
+
+            var progress = document.createElement('button');
+            progress.type = 'button';
+            progress.className = 'todo-progress' + (item.in_progress ? ' todo-progress-active' : '');
+            progress.title = item.in_progress ? '标记为未进行中' : '标记为进行中';
+            progress.textContent = item.in_progress ? '进行中' : '开始';
+            li.appendChild(progress);
 
             var text = document.createElement('span');
             text.className = 'todo-text';
@@ -134,7 +144,17 @@
         if (btn.classList.contains('todo-toggle')) {
             if (editing) return;
             item.done = !item.done;
-            apiUpdate(item.id, { done: item.done }).catch(function (err) { setError(err); });
+            var patch = { done: item.done };
+            if (item.done) { item.in_progress = false; patch.in_progress = false; }
+            apiUpdate(item.id, patch).catch(function (err) { setError(err); });
+        } else if (btn.classList.contains('todo-progress')) {
+            if (editing || item.done) return;
+            item.in_progress = !item.in_progress;
+            btn.classList.toggle('todo-progress-active', item.in_progress);
+            btn.textContent = item.in_progress ? '进行中' : '开始';
+            btn.title = item.in_progress ? '标记为未进行中' : '标记为进行中';
+            li.classList.toggle('todo-inprogress', item.in_progress);
+            apiUpdate(item.id, { in_progress: item.in_progress }).catch(function (err) { setError(err); });
         } else if (btn.classList.contains('todo-prio')) {
             if (editing) return;
             var next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(item.priority) + 1) % PRIORITY_CYCLE.length];
