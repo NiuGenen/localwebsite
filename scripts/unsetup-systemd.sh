@@ -14,4 +14,4 @@ if loginctl show-user "$USER" 2>/dev/null | grep -q "Linger=yes"; then
     echo "提示: Linger 仍为开启状态，如需一并关闭，请手动执行:"
     echo "    sudo loginctl disable-linger $USER"
 fi
-echo "重新安装: ./setup-systemd.sh"
+echo "重新安装: ./scripts/setup-systemd.sh"

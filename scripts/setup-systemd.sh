@@ -1,5 +1,5 @@
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
 USER_UNIT_DIR="$HOME/.config/systemd/user"
 NGINX_BIN="$HOME/nginx_install/usr/sbin/nginx"
 NGINX_CONF="$DIR/nginx.conf"
@@ -19,7 +19,7 @@ fi
 
 if pgrep -f "nginx.*$DIR" > /dev/null 2>&1 || pgrep -f "$BACKEND_PY" > /dev/null 2>&1; then
     echo "Detected manually-started processes, stopping them first..."
-    "$DIR/stop.sh"
+    "$DIR/scripts/stop.sh"
     sleep 1
 fi
 

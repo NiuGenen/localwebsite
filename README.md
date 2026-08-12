@@ -31,9 +31,14 @@
 .
 ├── nginx.conf          # Nginx 配置
 ├── backend.py          # Flask 后端（全部 API）
-├── start.sh            # 启动脚本（Flask + Nginx）
-├── stop.sh             # 停止脚本
 ├── venv/               # Python 虚拟环境（Flask）
+├── scripts/            # 管理脚本
+│   ├── start.sh            # 启动脚本（Flask + Nginx）
+│   ├── stop.sh             # 停止脚本
+│   ├── setup-systemd.sh    # 配置开机自启
+│   ├── check-services.sh   # 检测服务状态
+│   ├── disable-systemd.sh  # 取消开机自启
+│   └── unsetup-systemd.sh  # 移除 systemd 服务
 └── site/
     ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片）
     ├── files/
@@ -56,8 +61,8 @@
 依赖：Nginx、Python3 + venv（Flask）。
 
 ```bash
-./start.sh     # 启动 Flask 后端 + Nginx
-./stop.sh      # 停止服务
+./scripts/start.sh     # 启动 Flask 后端 + Nginx
+./scripts/stop.sh      # 停止服务
 ```
 
 - 本机访问：<http://localhost:8080>

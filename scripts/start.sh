@@ -1,5 +1,5 @@
 #!/bin/bash
-DIR="$(dirname "$0")"
+DIR="$(cd "$(dirname "$0")/.." && pwd)"
 NGINX_BIN="$HOME/nginx_install/usr/sbin/nginx"
 CONF="$DIR/nginx.conf"
 VENV_PYTHON="$DIR/venv/bin/python3"
