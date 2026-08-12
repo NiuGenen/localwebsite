@@ -15,9 +15,9 @@
     var PRIORITY_LABEL = { high: '高', medium: '中', low: '低' };
     var PRIORITY_CYCLE = ['high', 'medium', 'low'];
 
-    var STATUS_CYCLE = { pending: 'in_progress', in_progress: 'paused', paused: 'pending' };
+    var STATUS_CYCLE = { pending: 'in_progress', in_progress: 'paused', paused: 'in_progress' };
     var STATUS_LABEL = { pending: '开始', in_progress: '进行中', paused: '暂停' };
-    var STATUS_TITLE = { pending: '标记为进行中', in_progress: '标记为暂停', paused: '重新开始' };
+    var STATUS_TITLE = { pending: '标记为进行中', in_progress: '标记为暂停', paused: '恢复进行中' };
     var GROUP_META = {
         in_progress: { label: '进行中', icon: '⏳' },
         paused: { label: '暂停', icon: '⏸' },
@@ -119,6 +119,15 @@
             progress.textContent = STATUS_LABEL[status];
             li.appendChild(progress);
 
+            if (status === 'paused') {
+                var resetBtn = document.createElement('button');
+                resetBtn.type = 'button';
+                resetBtn.className = 'todo-progress-reset';
+                resetBtn.title = '标记为未开始';
+                resetBtn.innerHTML = '&#10005;';
+                li.appendChild(resetBtn);
+            }
+
             var text = document.createElement('span');
             text.className = 'todo-text';
             text.textContent = item.text;
@@ -197,13 +206,30 @@
             apiUpdate(item.id, patch).catch(function (err) { setError(err); });
         } else if (btn.classList.contains('todo-progress')) {
             if (editing || item.done) return;
-            var next = STATUS_CYCLE[getStatus(item)];
+            var prevStatus = getStatus(item);
+            var next = STATUS_CYCLE[prevStatus];
             item.status = next;
             li.className = 'todo-item' + (next === 'in_progress' ? ' todo-inprogress' : (next === 'paused' ? ' todo-paused' : ''));
             btn.className = 'todo-progress' + (next === 'in_progress' ? ' todo-progress-active' : (next === 'paused' ? ' todo-progress-paused' : ''));
             btn.textContent = STATUS_LABEL[next];
             btn.title = STATUS_TITLE[next];
+            if (prevStatus === 'paused' && next !== 'paused') {
+                var resetBtn = li.querySelector('.todo-progress-reset');
+                if (resetBtn) resetBtn.remove();
+            }
             apiUpdate(item.id, { status: next }).catch(function (err) { setError(err); });
+        } else if (btn.classList.contains('todo-progress-reset')) {
+            if (editing || item.done) return;
+            item.status = 'pending';
+            li.className = 'todo-item';
+            var mainBtn = li.querySelector('.todo-progress');
+            if (mainBtn) {
+                mainBtn.className = 'todo-progress';
+                mainBtn.textContent = STATUS_LABEL.pending;
+                mainBtn.title = STATUS_TITLE.pending;
+            }
+            btn.remove();
+            apiUpdate(item.id, { status: 'pending' }).catch(function (err) { setError(err); });
         } else if (btn.classList.contains('todo-prio')) {
             if (editing) return;
             var next = PRIORITY_CYCLE[(PRIORITY_CYCLE.indexOf(item.priority) + 1) % PRIORITY_CYCLE.length];
