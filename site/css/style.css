@@ -296,6 +296,9 @@ footer {
     color: #2c3e50;
     word-break: break-all;
 }
+.btn-copy {
+    margin-left: auto;
+}
 
 /* Markdown rendered content */
 #reader-content h1,

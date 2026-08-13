@@ -24,6 +24,7 @@
     var contentEl = document.getElementById('reader-content');
     var filenameEl = document.getElementById('reader-filename');
     var backBtn = document.getElementById('custom-back-btn');
+    var copyBtn = document.getElementById('custom-copy-btn');
 
     var editModal = document.getElementById('custom-modal');
     var editModalTitle = document.getElementById('custom-modal-title-input');
@@ -42,6 +43,8 @@
     var page = null;
     var currentPath = '';
     var currentDocDir = '';
+    var currentDocText = '';
+    var copyTimer = null;
     var isLocal = false;
     var msgTimer = null;
 
@@ -413,6 +416,7 @@
             .then(function (mdText) {
                 var slash = rel.lastIndexOf('/');
                 currentDocDir = 'custom/' + pageId + '/' + (slash >= 0 ? rel.slice(0, slash + 1) : '');
+                currentDocText = mdText;
                 renderHtml(contentEl, mdText);
             })
             .catch(function (err) {
@@ -435,6 +439,19 @@
     backBtn.addEventListener('click', function () {
         hide(readingEl);
         show(filesEl);
+    });
+
+    copyBtn.addEventListener('click', function () {
+        if (!currentDocText) return;
+        copyText(currentDocText).then(function () {
+            copyBtn.textContent = '已复制 ✓';
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(function () { copyBtn.textContent = '复制全文'; }, 1500);
+        }).catch(function () {
+            copyBtn.textContent = '复制失败';
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(function () { copyBtn.textContent = '复制全文'; }, 1500);
+        });
     });
 
     // ===== 编辑页面 =====

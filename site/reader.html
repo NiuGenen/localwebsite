@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 阅读器</title>
-    <link rel="stylesheet" href="/css/style.css?v=10">
+    <link rel="stylesheet" href="/css/style.css?v=11">
     <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
 </head>
 <body>
@@ -28,6 +28,7 @@
                 <div id="reader-toolbar">
                     <a href="/reader.html" class="btn" id="btn-back">← 文件列表</a>
                     <span id="reader-filename"></span>
+                    <button type="button" class="btn btn-sm btn-copy" id="btn-copy">复制全文</button>
                 </div>
                 <div id="reader-content"></div>
             </div>
@@ -45,6 +46,7 @@
     </footer>
     <script src="/js/marked.min.js"></script>
     <script src="/js/highlight.min.js"></script>
+    <script src="/js/copy.js"></script>
     <script>
 (function () {
     var fileListEl = document.getElementById('file-list');
@@ -56,7 +58,10 @@
     var filenameEl = document.getElementById('reader-filename');
     var fileListContainer = document.getElementById('md-file-list');
     var emptyEl = document.getElementById('file-list-empty');
+    var copyBtn = document.getElementById('btn-copy');
     var currentBase = '';
+    var currentMdText = '';
+    var copyTimer = null;
 
     function show(el) { if (el) el.style.display = ''; }
     function hide(el) { if (el) el.style.display = 'none'; }
@@ -154,6 +159,7 @@
                 hide(loadingEl);
                 show(readingViewEl);
                 filenameEl.textContent = getFileName(path);
+                currentMdText = mdText;
 
                 contentEl.innerHTML = marked.parse(mdText);
                 contentEl.querySelectorAll('pre code').forEach(function (block) {
@@ -176,6 +182,20 @@
             e.preventDefault();
             renderMarkdown(href.replace(/^\/+/, ''));
         }
+    });
+
+    // 复制全文
+    copyBtn.addEventListener('click', function () {
+        if (!currentMdText) return;
+        copyText(currentMdText).then(function () {
+            copyBtn.textContent = '已复制 ✓';
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(function () { copyBtn.textContent = '复制全文'; }, 1500);
+        }).catch(function () {
+            copyBtn.textContent = '复制失败';
+            clearTimeout(copyTimer);
+            copyTimer = setTimeout(function () { copyBtn.textContent = '复制全文'; }, 1500);
+        });
     });
 
     // --- Init ---
