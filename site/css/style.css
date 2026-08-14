@@ -1265,13 +1265,13 @@ footer {
     white-space: nowrap;
 }
 .features-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.25rem;
+    column-width: 250px;
+    column-gap: 1.25rem;
 }
 .feature-card {
     border-top-color: #8e44ad;
-    margin-bottom: 0;
+    break-inside: avoid;
+    margin-bottom: 1.25rem;
 }
 .feature-card h3 {
     color: #2c3e50;
@@ -1285,7 +1285,6 @@ footer {
     line-height: 1.7;
     white-space: pre-wrap;
     word-break: break-all;
-    flex: 1;
 }
 .features-loading,
 .features-empty {
