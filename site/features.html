@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实用功能 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=16">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="features-panel">
+            <div class="features-head">
+                <h2>实用功能</h2>
+                <button type="button" class="btn btn-sm btn-success" id="feature-create-btn">创建</button>
+            </div>
+            <div class="features-search-row">
+                <input type="text" id="feature-search" placeholder="搜索标题或内容..." maxlength="100">
+                <span class="features-count" id="features-count"></span>
+            </div>
+            <div class="features-grid" id="features-grid"></div>
+            <p class="features-loading" id="features-loading">加载功能列表...</p>
+            <p class="features-empty" id="features-empty" style="display:none">暂无功能，点击右上角「创建」开始。</p>
+            <p class="features-error" id="features-error" style="display:none"></p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <div class="fb-modal-overlay" id="feature-modal" style="display:none">
+        <div class="fb-modal fb-modal-lg">
+            <h3 class="fb-modal-title">创建功能</h3>
+            <input type="text" id="feature-modal-title" class="fb-modal-input" placeholder="标题" maxlength="100">
+            <textarea id="feature-modal-content" class="fb-modal-textarea" placeholder="内容（纯文本，无需 Markdown 格式）" maxlength="5000"></textarea>
+            <p class="fb-modal-hint" id="feature-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="feature-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="feature-modal-confirm">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/features.js?v=1"></script>
+</body>
+</html>

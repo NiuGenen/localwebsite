@@ -18,6 +18,9 @@ TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "to
 PRIORITIES = ("high", "medium", "low")
 TODO_STATUSES = {"pending", "in_progress", "paused"}
 
+# ===== 实用功能数据文件 =====
+FEATURES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "features.json")
+
 # ===== 自定义页面数据 =====
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 CUSTOM_PAGES_FILE = os.path.join(SITE_DIR, "custom_pages.json")
@@ -345,6 +348,55 @@ def api_todo_delete(todo_id):
         return jsonify({"error": "待办事项不存在"}), 404
     save_todos(new_todos)
     return jsonify({"success": True})
+
+# ===== 实用功能 API =====
+
+def load_features():
+    try:
+        with open(FEATURES_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_features(features):
+    tmp = FEATURES_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(features, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, FEATURES_FILE)
+
+@app.route("/api/features", methods=["GET"])
+def api_features_list():
+    features = load_features()
+    features.sort(key=lambda f: f.get("created", 0), reverse=True)
+    return jsonify(features)
+
+@app.route("/api/features", methods=["POST"])
+def api_features_create():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+    if len(title) > 100:
+        return jsonify({"error": "标题过长"}), 400
+    if not content:
+        return jsonify({"error": "内容不能为空"}), 400
+    if len(content) > 5000:
+        return jsonify({"error": "内容过长"}), 400
+
+    item = {
+        "id": uuid.uuid4().hex,
+        "title": title,
+        "content": content,
+        "created": int(time.time()),
+    }
+    features = load_features()
+    features.append(item)
+    save_features(features)
+    return jsonify(item), 201
 
 # ===== 自定义页面 API =====
 

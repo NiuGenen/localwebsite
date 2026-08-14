@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=15">
+    <link rel="stylesheet" href="/css/style.css?v=16">
 </head>
 <body>
     <header>
@@ -57,6 +57,12 @@
                 <p>将相关的 Markdown 文档组织成独立阅读页面。</p>
                 <a href="/pages.html" class="btn">进入页面</a>
             </div>
+            <div class="card card-features">
+                <div class="card-icon">🔧</div>
+                <h3>实用功能</h3>
+                <p>记录实用的功能说明与小技巧。</p>
+                <a href="/features.html" class="btn">进入功能</a>
+            </div>
             <div id="pinned-cards"></div>
         </section>
     </main>
@@ -69,6 +75,16 @@
     <script>
     (function () {
         var card = document.querySelector('.card-todo');
+        if (!card) return;
+        fetch('/api/local')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.local) card.style.display = 'none';
+            })
+            .catch(function () { card.style.display = 'none'; });
+    })();
+    (function () {
+        var card = document.querySelector('.card-features');
         if (!card) return;
         fetch('/api/local')
             .then(function (r) { return r.json(); })
