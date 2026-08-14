@@ -15,36 +15,29 @@
 
     var features = [];
     var keyword = '';
+    var searchTimer = null;
 
     function setError(msg) {
         if (msg) { errorEl.textContent = msg; errorEl.style.display = ''; }
         else { errorEl.style.display = 'none'; }
     }
 
-    function matches(item, kw) {
-        if (!kw) return true;
-        return (item.title || '').toLowerCase().indexOf(kw) !== -1 ||
-               (item.content || '').toLowerCase().indexOf(kw) !== -1;
-    }
-
     function render() {
         gridEl.innerHTML = '';
-        var kw = keyword.toLowerCase().trim();
-        var visible = features.filter(function (f) { return matches(f, kw); });
-        countEl.textContent = visible.length + ' / ' + features.length + ' 项';
+        countEl.textContent = features.length + ' 项';
 
+        if (keyword && features.length === 0) {
+            gridEl.innerHTML = '<p class="features-empty">没有匹配「' + searchEl.value.trim() + '」的内容。</p>';
+            return;
+        }
         if (features.length === 0) {
             emptyEl.style.display = '';
             countEl.textContent = '';
             return;
         }
         emptyEl.style.display = 'none';
-        if (visible.length === 0) {
-            gridEl.innerHTML = '<p class="features-empty">没有匹配「' + searchEl.value + '」的内容。</p>';
-            return;
-        }
 
-        visible.forEach(function (f) {
+        features.forEach(function (f) {
             var card = document.createElement('div');
             card.className = 'card feature-card';
 
@@ -62,7 +55,9 @@
     }
 
     function reload() {
-        return fetch('/api/features')
+        var url = '/api/features';
+        if (keyword) url += '?q=' + encodeURIComponent(keyword);
+        return fetch(url)
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();
@@ -145,8 +140,9 @@
     });
 
     searchEl.addEventListener('input', function () {
-        keyword = searchEl.value;
-        render();
+        keyword = searchEl.value.trim();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(reload, 200);
     });
 
     reload();

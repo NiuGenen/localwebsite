@@ -369,6 +369,12 @@ def save_features(features):
 def api_features_list():
     features = load_features()
     features.sort(key=lambda f: f.get("created", 0), reverse=True)
+    q = (request.args.get("q") or "").strip().lower()
+    if q:
+        features = [
+            f for f in features
+            if q in (f.get("title") or "").lower() or q in (f.get("content") or "").lower()
+        ]
     return jsonify(features)
 
 @app.route("/api/features", methods=["POST"])
