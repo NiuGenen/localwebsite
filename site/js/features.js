@@ -6,7 +6,9 @@
     var countEl = document.getElementById('features-count');
     var searchEl = document.getElementById('feature-search');
     var createBtn = document.getElementById('feature-create-btn');
+    var editBtn = document.getElementById('feature-edit-btn');
     var modal = document.getElementById('feature-modal');
+    var modalHead = document.getElementById('feature-modal-head');
     var modalTitle = document.getElementById('feature-modal-title');
     var modalContent = document.getElementById('feature-modal-content');
     var modalHint = document.getElementById('feature-modal-hint');
@@ -16,6 +18,9 @@
     var features = [];
     var keyword = '';
     var searchTimer = null;
+    var isLocal = false;
+    var editMode = false;
+    var editingId = null;
 
     function setError(msg) {
         if (msg) { errorEl.textContent = msg; errorEl.style.display = ''; }
@@ -50,6 +55,28 @@
 
             card.appendChild(h3);
             card.appendChild(content);
+
+            if (editMode) {
+                var actions = document.createElement('div');
+                actions.className = 'feature-actions';
+
+                var actEditBtn = document.createElement('button');
+                actEditBtn.type = 'button';
+                actEditBtn.className = 'btn btn-sm feature-edit-btn';
+                actEditBtn.textContent = '编辑';
+                actEditBtn.addEventListener('click', function () { openEdit(f); });
+
+                var actDelBtn = document.createElement('button');
+                actDelBtn.type = 'button';
+                actDelBtn.className = 'btn btn-sm btn-danger feature-del-btn';
+                actDelBtn.textContent = '删除';
+                actDelBtn.addEventListener('click', function () { doDelete(f); });
+
+                actions.appendChild(actEditBtn);
+                actions.appendChild(actDelBtn);
+                card.appendChild(actions);
+            }
+
             gridEl.appendChild(card);
         });
     }
@@ -73,6 +100,9 @@
     }
 
     function openModal() {
+        editingId = null;
+        modalHead.textContent = '创建功能';
+        modalConfirm.textContent = '创建';
         modalTitle.value = '';
         modalContent.value = '';
         modalHint.textContent = '';
@@ -82,7 +112,25 @@
     }
     function closeModal() { modal.style.display = 'none'; }
 
-    function doCreate() {
+    function openEdit(f) {
+        editingId = f.id;
+        modalHead.textContent = '编辑功能';
+        modalConfirm.textContent = '保存';
+        modalTitle.value = f.title;
+        modalContent.value = f.content;
+        modalHint.textContent = '';
+        modalHint.className = 'fb-modal-hint';
+        modal.style.display = 'flex';
+        modalTitle.focus();
+    }
+
+    function toggleEditMode() {
+        editMode = !editMode;
+        editBtn.textContent = editMode ? '完成编辑' : '编辑';
+        render();
+    }
+
+    function doSave() {
         var title = modalTitle.value.trim();
         var content = modalContent.value.trim();
         if (!title) {
@@ -98,9 +146,11 @@
             return;
         }
         modalConfirm.disabled = true;
-        modalConfirm.textContent = '创建中...';
-        fetch('/api/features', {
-            method: 'POST',
+        modalConfirm.textContent = '保存中...';
+        var url = '/api/features' + (editingId ? '/' + encodeURIComponent(editingId) : '');
+        var method = editingId ? 'PUT' : 'POST';
+        fetch(url, {
+            method: method,
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: title, content: content })
         })
@@ -112,7 +162,7 @@
                     closeModal();
                     return reload();
                 }
-                modalHint.textContent = res.data.error || '创建失败';
+                modalHint.textContent = res.data.error || '保存失败';
                 modalHint.className = 'fb-modal-hint fb-modal-hint-err';
             })
             .catch(function () {
@@ -121,15 +171,30 @@
             })
             .finally(function () {
                 modalConfirm.disabled = false;
-                modalConfirm.textContent = '创建';
+                modalConfirm.textContent = editingId ? '保存' : '创建';
             });
     }
 
+    function doDelete(f) {
+        if (!confirm('确定删除功能「' + f.title + '」？此操作不可恢复。')) return;
+        fetch('/api/features/' + encodeURIComponent(f.id), { method: 'DELETE' })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.success) {
+                    reload();
+                } else {
+                    alert('删除失败: ' + (d.error || '未知错误'));
+                }
+            })
+            .catch(function () { alert('删除失败: 网络错误'); });
+    }
+
     createBtn.addEventListener('click', openModal);
-    modalConfirm.addEventListener('click', doCreate);
+    editBtn.addEventListener('click', toggleEditMode);
+    modalConfirm.addEventListener('click', doSave);
     modalCancel.addEventListener('click', closeModal);
     modalTitle.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter') { e.preventDefault(); doCreate(); }
+        if (e.key === 'Enter') { e.preventDefault(); doSave(); }
         if (e.key === 'Escape') { closeModal(); }
     });
     modalContent.addEventListener('keydown', function (e) {
@@ -144,6 +209,14 @@
         clearTimeout(searchTimer);
         searchTimer = setTimeout(reload, 200);
     });
+
+    fetch('/api/local')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            isLocal = !!d.local;
+            if (isLocal) editBtn.style.display = '';
+        })
+        .catch(function () {});
 
     reload();
 })();

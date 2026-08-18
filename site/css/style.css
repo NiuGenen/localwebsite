@@ -1240,6 +1240,11 @@ footer {
     color: #2c3e50;
     font-size: 1.2rem;
 }
+.features-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
 .features-search-row {
     display: flex;
     align-items: center;
@@ -1292,6 +1297,18 @@ footer {
     color: #999;
     font-size: 0.9rem;
     padding: 1.5rem 0;
+}
+.feature-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+}
+.feature-edit-btn {
+    background: #3498db;
+}
+.feature-edit-btn:hover {
+    background: #2980b9;
 }
 .features-error {
     margin-top: 1rem;

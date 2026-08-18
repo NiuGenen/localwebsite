@@ -404,6 +404,43 @@ def api_features_create():
     save_features(features)
     return jsonify(item), 201
 
+@app.route("/api/features/<feature_id>", methods=["PUT"])
+def api_features_update(feature_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    features = load_features()
+    for f in features:
+        if f["id"] == feature_id:
+            if "title" in data:
+                title = (data["title"] or "").strip()
+                if not title:
+                    return jsonify({"error": "标题不能为空"}), 400
+                if len(title) > 100:
+                    return jsonify({"error": "标题过长"}), 400
+                f["title"] = title
+            if "content" in data:
+                content = (data.get("content") or "").strip()
+                if not content:
+                    return jsonify({"error": "内容不能为空"}), 400
+                if len(content) > 5000:
+                    return jsonify({"error": "内容过长"}), 400
+                f["content"] = content
+            save_features(features)
+            return jsonify(f)
+    return jsonify({"error": "功能不存在"}), 404
+
+@app.route("/api/features/<feature_id>", methods=["DELETE"])
+def api_features_delete(feature_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    features = load_features()
+    new_features = [f for f in features if f["id"] != feature_id]
+    if len(new_features) == len(features):
+        return jsonify({"error": "功能不存在"}), 404
+    save_features(new_features)
+    return jsonify({"success": True})
+
 # ===== 自定义页面 API =====
 
 def load_pages():
