@@ -1,6 +1,6 @@
 # 本地文件站（Local File Station）
 
-一个基于 **Nginx + Flask** 的局域网文件共享网站，提供文件浏览与管理、Markdown 阅读、自定义阅读页面、待办事项等功能。
+一个基于 **Nginx + Flask** 的局域网文件共享网站，提供文件浏览与管理、Markdown 阅读、自定义阅读页面、待办事项、实用功能等功能。
 
 ## 功能特性
 
@@ -16,15 +16,18 @@
   - 阅读视图同样提供**复制全文**按钮。
   - **创建 / 编辑 / 上传 / 删除 / 贴首页** 均**仅限本机**；查看对所有局域网用户开放。
 - **待办事项**：服务端持久化（`site/todo.json`），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
+- **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`site/features.json`），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
+  - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
+  - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
-- **本机访问判定**：首页「待办事项」「自定义页面」的管理入口仅在 localhost 访问时显示。
+- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」的管理入口仅在 localhost 访问时显示。
 
 ## 架构
 
 | 组件 | 端口 | 职责 |
 |---|---|---|
-| Nginx | 8080 | 静态页面、`/files/` autoindex、`/api/` 反向代理到 Flask、todo 页/API 仅限 localhost |
-| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、新建、移动、重命名、自定义页面、待办、本机判定） |
+| Nginx | 8080 | 静态页面、`/files/` autoindex、`/api/` 反向代理到 Flask、todo 页/API 与 features 页/API 仅限 localhost |
+| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、新建、移动、重命名、自定义页面、待办、实用功能、本机判定） |
 
 ## 目录结构
 
@@ -48,13 +51,17 @@
     ├── pages.html      # 自定义页面列表（创建、贴首页）
     ├── custom.html     # 自定义页面查看（页面文件浏览器 + 阅读）
     ├── todo.html       # 待办事项页面
+    ├── features.html   # 实用功能页面（卡片列表 + 搜索 + 本机编辑模式）
     ├── info.html       # 关于页
     ├── files/          # 共享文件目录（gitignored）
     ├── custom/         # 自定义页面文件目录（gitignored）
     ├── custom_pages.json  # 自定义页面元数据（gitignored）
-    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、pinned.js 等）
+    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js 等）
     ├── css/style.css   # 全局样式
-    └── todo.json       # 待办数据文件（gitignored）
+    ├── todo.json       # 待办数据文件（gitignored）
+    └── features.json   # 实用功能数据文件（gitignored）
+└── skill/
+    └── local-features/ # 本地功能库技能（features.sh 维护脚本 + SKILL.md）
 ```
 
 ## 快速开始
@@ -68,8 +75,8 @@
 
 - 本机访问：<http://localhost:8080>
 - 局域网访问：<http://服务器局域网IP:8080>
-- **待办事项与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
-- 自定义页面/待办查看对所有局域网用户开放。
+- **待办事项、实用功能与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
+- 自定义页面/待办/实用功能查看对所有局域网用户开放。
 
 > 注：本项目使用的 Nginx 位于 `~/nginx_install/usr/sbin/nginx`（由 `apt download nginx nginx-common nginx-core` 下载后用 `dpkg-deb -x` 解压到 home）。
 
@@ -79,17 +86,18 @@
 
 | 配置项 | 说明 |
 |---|---|
-| `LOCAL_IPS` | 本机判定集合（待办与自定义页面管理访问控制，默认仅回环地址 `127.0.0.1` / `::1`） |
+| `LOCAL_IPS` | 本机判定集合（待办/实用功能/自定义页面管理访问控制，默认仅回环地址 `127.0.0.1` / `::1`） |
 | `BLOCKED_PATHS` | 禁止修改的目录黑名单（相对 `files/`，前缀匹配） |
 | `TODO_FILE` | 待办数据文件路径（`site/todo.json`） |
 | `PRIORITIES` | 待办优先级白名单（`high` / `medium` / `low`） |
+| `FEATURES_FILE` | 实用功能数据文件路径（`site/features.json`） |
 | `CUSTOM_PAGES_FILE` | 自定义页面元数据文件（`site/custom_pages.json`） |
 | `CUSTOM_DIR` | 自定义页面文件根目录（`site/custom/`） |
 | `DOC_EXTS` / `IMAGE_EXTS` | 自定义页面上传允许的文档（`.md`）与图片扩展名（png/jpg/jpeg/gif/webp/bmp，不含 svg） |
 
 ### nginx.conf
 
-- `/todo.html` 与 `/api/todo`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
+- `/todo.html`、`/features.html` 与 `/api/todo`、`/api/features`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
 - `/api/`：反向代理到 Flask，`client_max_body_size 100m`（上传大小限制）
 
 ## API 一览
@@ -110,11 +118,13 @@
 | POST | `/api/pages/<id>/delete` | 删除页面内文件/文件夹（仅本机） |
 | GET / POST | `/api/todo` | 待办列表 / 添加 |
 | PUT / DELETE | `/api/todo/<id>` | 更新 / 删除待办 |
+| GET / POST | `/api/features` | 实用功能列表（支持 `?q=` 服务端搜索）/ 创建（仅本机） |
+| PUT / DELETE | `/api/features/<id>` | 更新 / 删除实用功能（仅本机） |
 
 ## 安全与数据
 
 - **路径穿越防护**：`safe_join_soft` 规范化路径并校验前缀，上传文件名经 `basename` 检查。
 - **黑名单保护**：黑名单目录禁止上传、新建、移动、重命名。
-- **本机操作限制**：待办、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机。
+- **本机操作限制**：待办、实用功能、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。
-- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json` 均已加入 `.gitignore`，不入库。
+- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json` 均已加入 `.gitignore`，不入库。
