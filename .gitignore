@@ -5,3 +5,9 @@ site/todo.json
 site/custom/
 site/custom_pages.json
 site/features.json
+
+# Windows 部署
+venv-win/
+logs/
+temp/
+*.pid

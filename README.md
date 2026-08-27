@@ -33,16 +33,23 @@
 
 ```
 .
-├── nginx.conf          # Nginx 配置
-├── backend.py          # Flask 后端（全部 API）
-├── venv/               # Python 虚拟环境（Flask）
-├── scripts/            # 管理脚本
-│   ├── start.sh            # 启动脚本（Flask + Nginx）
-│   ├── stop.sh             # 停止脚本
-│   ├── setup-systemd.sh    # 配置开机自启
-│   ├── check-services.sh   # 检测服务状态
-│   ├── disable-systemd.sh  # 取消开机自启
-│   └── unsetup-systemd.sh  # 移除 systemd 服务
+├── nginx.conf              # Nginx 配置（Linux）
+├── nginx.windows.conf      # Nginx 配置（Windows，相对 prefix 路径）
+├── backend.py              # Flask 后端（全部 API）
+├── requirements.txt        # Python 依赖清单（双平台）
+├── venv/                   # Python 虚拟环境（Linux，Flask）
+├── venv-win/               # Python 虚拟环境（Windows，不入库）
+├── scripts/                # 管理脚本
+│   ├── start.sh            # 启动脚本（Linux，Flask + Nginx）
+│   ├── stop.sh             # 停止脚本（Linux）
+│   ├── setup-systemd.sh    # 配置开机自启（Linux）
+│   ├── check-services.sh   # 检测服务状态（Linux）
+│   ├── disable-systemd.sh  # 取消开机自启（Linux）
+│   ├── unsetup-systemd.sh  # 移除 systemd 服务（Linux）
+│   └── windows/            # Windows 管理脚本
+│       ├── start.ps1           # 启动（Flask + Nginx）
+│       ├── stop.ps1            # 停止
+│       └── check.ps1           # 状态检查
 └── site/
     ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片）
     ├── files/
@@ -79,6 +86,62 @@
 - 自定义页面/待办/实用功能查看对所有局域网用户开放。
 
 > 注：本项目使用的 Nginx 位于 `~/nginx_install/usr/sbin/nginx`（由 `apt download nginx nginx-common nginx-core` 下载后用 `dpkg-deb -x` 解压到 home）。
+
+## Windows 部署
+
+Linux 部署（`scripts/*.sh`、`systemd`）保持不变；Windows 部署通过**新增的独立文件**实现，不影响 Linux 可用性。
+
+### 依赖
+
+| 组件 | 安装方式 |
+|---|---|
+| Python 3（需真 Python，非 Microsoft Store 别名） | `winget install Python.Python.3.12`（安装时勾选 Add to PATH），验证 `python --version` |
+| Flask | `python -m venv venv-win; venv-win\Scripts\pip install -r requirements.txt` |
+| Nginx（Windows 版） | `winget install nginx` 或 `choco install nginx`，验证 `nginx -v`（或以 `-NginxExe` 指定完整路径） |
+
+### 启动 / 停止 / 检查
+
+PowerShell：
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\windows\start.ps1        # 启动
+powershell -ExecutionPolicy Bypass -File scripts\windows\stop.ps1         # 停止
+powershell -ExecutionPolicy Bypass -File scripts\windows\check.ps1        # 状态检查
+```
+
+Git Bash：
+```bash
+bash scripts/windows/start-windows.sh      # 启动
+bash scripts/windows/stop-windows.sh       # 停止
+bash scripts/windows/check-windows.sh      # 状态检查
+```
+
+> 若 nginx 不在 PATH（如仅安装到指定目录），可指定路径启动：
+> `NGINX_BIN=/path/to/nginx.exe bash scripts/windows/start-windows.sh`
+
+- 本机访问：<http://localhost:8080>
+- 局域网访问：<http://服务器局域网IP:8080>
+- **待办事项、实用功能与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
+
+### 防火墙（局域网访问必需，一次即可，需管理员）
+
+```powershell
+New-NetFirewallRule -DisplayName "LocalWebsite 8080" -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+```
+
+### Windows 新增文件说明
+
+| 文件 | 说明 |
+|---|---|
+| `requirements.txt` | Python 依赖清单（双平台通用） |
+| `nginx.windows.conf` | Windows 版 nginx 配置（相对 prefix 路径，配合 `-p` 使用） |
+| `scripts/windows/start.ps1` | 启动 Flask + Nginx（自动创建 `logs/`、`temp/`） |
+| `scripts/windows/stop.ps1`  | 停止 Flask + Nginx |
+| `scripts/windows/check.ps1` | 进程与 HTTP 状态检查 |
+| `scripts/windows/start-windows.sh` | Git Bash 启动（`nginx` 在 PATH，或用 `NGINX_BIN` 指定） |
+| `scripts/windows/stop-windows.sh`  | Git Bash 停止 |
+| `scripts/windows/check-windows.sh` | Git Bash 状态检查 |
+
+> `venv-win/`、`logs/`、`temp/`、`*.pid` 已加入 `.gitignore`，不入库。
 
 ## 配置说明
 
