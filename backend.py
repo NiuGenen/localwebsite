@@ -39,7 +39,7 @@ def safe_leaf_name(name):
 def is_blocked(rel_path):
     if not rel_path or rel_path.strip() == "" or rel_path.strip() == ".":
         return False
-    clean = rel_path.strip().strip("/")
+    clean = rel_path.strip().strip("/").replace("\\", "/")
     for b in BLOCKED_PATHS:
         if clean == b or clean.startswith(b + "/"):
             return True
@@ -50,7 +50,7 @@ def safe_join_soft(base, child):
     if not child or child.strip() == "":
         return base
     norm = os.path.normpath(os.path.join(base, child))
-    base_str = base.rstrip("/") + "/"
+    base_str = os.path.normpath(base) + os.sep
     if not norm.startswith(base_str):
         return None
     return norm
@@ -115,7 +115,7 @@ def api_upload():
         if os.path.basename(f.filename) != f.filename:
             return jsonify({"error": f"非法的文件名: {f.filename}"}), 400
         save_path = os.path.normpath(os.path.join(target_dir, f.filename))
-        base_str = UPLOAD_DIR.rstrip("/") + "/"
+        base_str = UPLOAD_DIR + os.sep
         if not save_path.startswith(base_str):
             return jsonify({"error": "无效的文件路径"}), 400
         f.save(save_path)
@@ -152,7 +152,7 @@ def api_mkdir():
         return jsonify({"error": "该目录不允许创建文件夹"}), 403
 
     new_dir = os.path.normpath(os.path.join(parent_dir, name))
-    base_str = UPLOAD_DIR.rstrip("/") + "/"
+    base_str = UPLOAD_DIR + os.sep
     if not new_dir.startswith(base_str):
         return jsonify({"error": "无效的路径"}), 400
 
@@ -242,7 +242,7 @@ def api_rename():
         return jsonify({"error": "该文件不允许重命名"}), 403
 
     new_path = os.path.normpath(os.path.join(os.path.dirname(src), name))
-    base_str = UPLOAD_DIR.rstrip("/") + "/"
+    base_str = UPLOAD_DIR + os.sep
     if not new_path.startswith(base_str):
         return jsonify({"error": "无效的路径"}), 400
     if os.path.lexists(new_path):
@@ -644,7 +644,7 @@ def api_pages_mkdir(page_id):
     if not parent:
         return jsonify({"error": "无效的目录路径"}), 400
     new_dir = os.path.normpath(os.path.join(parent, name))
-    base_str = d.rstrip("/") + "/"
+    base_str = d + os.sep
     if not new_dir.startswith(base_str):
         return jsonify({"error": "无效的路径"}), 400
     if os.path.lexists(new_dir):
