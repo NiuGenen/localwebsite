@@ -21,6 +21,9 @@ TODO_STATUSES = {"pending", "in_progress", "paused"}
 # ===== 实用功能数据文件 =====
 FEATURES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "features.json")
 
+# ===== 首页自定义网页卡片数据文件 =====
+LINKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "links.json")
+
 # ===== 自定义页面数据 =====
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
 CUSTOM_PAGES_FILE = os.path.join(SITE_DIR, "custom_pages.json")
@@ -439,6 +442,108 @@ def api_features_delete(feature_id):
     if len(new_features) == len(features):
         return jsonify({"error": "功能不存在"}), 404
     save_features(new_features)
+    return jsonify({"success": True})
+
+# ===== 首页自定义网页卡片 API =====
+
+def load_links():
+    try:
+        with open(LINKS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_links(links):
+    tmp = LINKS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(links, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, LINKS_FILE)
+
+def valid_url(url):
+    return bool(re.match(r'^(https?://|/)', url))
+
+@app.route("/api/links", methods=["GET"])
+def api_links_list():
+    links = load_links()
+    links.sort(key=lambda l: l.get("created", 0), reverse=True)
+    return jsonify(links)
+
+@app.route("/api/links", methods=["POST"])
+def api_links_create():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    url = (data.get("url") or "").strip()
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+    if len(title) > 100:
+        return jsonify({"error": "标题过长"}), 400
+    if len(description) > 2000:
+        return jsonify({"error": "简介过长"}), 400
+    if not url:
+        return jsonify({"error": "目标网页链接不能为空"}), 400
+    if len(url) > 500:
+        return jsonify({"error": "链接过长"}), 400
+    if not valid_url(url):
+        return jsonify({"error": "链接需以 http://、https:// 或 / 开头"}), 400
+
+    item = {
+        "id": uuid.uuid4().hex,
+        "title": title,
+        "description": description,
+        "url": url,
+        "created": int(time.time()),
+    }
+    links = load_links()
+    links.append(item)
+    save_links(links)
+    return jsonify(item), 201
+
+@app.route("/api/links/<link_id>", methods=["PUT"])
+def api_links_update(link_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    links = load_links()
+    for l in links:
+        if l["id"] == link_id:
+            if "title" in data:
+                title = (data["title"] or "").strip()
+                if not title:
+                    return jsonify({"error": "标题不能为空"}), 400
+                if len(title) > 100:
+                    return jsonify({"error": "标题过长"}), 400
+                l["title"] = title
+            if "description" in data:
+                description = (data.get("description") or "").strip()
+                if len(description) > 2000:
+                    return jsonify({"error": "简介过长"}), 400
+                l["description"] = description
+            if "url" in data:
+                url = (data.get("url") or "").strip()
+                if not url:
+                    return jsonify({"error": "目标网页链接不能为空"}), 400
+                if len(url) > 500:
+                    return jsonify({"error": "链接过长"}), 400
+                if not valid_url(url):
+                    return jsonify({"error": "链接需以 http://、https:// 或 / 开头"}), 400
+                l["url"] = url
+            save_links(links)
+            return jsonify(l)
+    return jsonify({"error": "卡片不存在"}), 404
+
+@app.route("/api/links/<link_id>", methods=["DELETE"])
+def api_links_delete(link_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    links = load_links()
+    new_links = [l for l in links if l["id"] != link_id]
+    if len(new_links) == len(links):
+        return jsonify({"error": "卡片不存在"}), 404
+    save_links(new_links)
     return jsonify({"success": True})
 
 # ===== 自定义页面 API =====

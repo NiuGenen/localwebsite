@@ -64,14 +64,37 @@
                 <a href="/features.html" class="btn">进入功能</a>
             </div>
             <div id="pinned-cards"></div>
+            <div class="homecards-head" id="homecards-head" style="display:none">
+                <h3>自定义网页</h3>
+                <div class="homecards-head-actions">
+                    <button type="button" class="btn btn-sm" id="homecard-edit-btn" style="display:none">编辑</button>
+                    <button type="button" class="btn btn-sm btn-success" id="homecard-create-btn" style="display:none">添加卡片</button>
+                </div>
+            </div>
+            <div id="homecards"></div>
         </section>
     </main>
     <footer>
         <p>&copy; 2026 本地文件站</p>
     </footer>
 
+    <div class="fb-modal-overlay" id="homecard-modal" style="display:none">
+        <div class="fb-modal fb-modal-lg">
+            <h3 class="fb-modal-title" id="homecard-modal-head">添加网页卡片</h3>
+            <input type="text" id="homecard-modal-title" class="fb-modal-input" placeholder="标题" maxlength="100">
+            <input type="text" id="homecard-modal-url" class="fb-modal-input fb-modal-input-gap" placeholder="目标网页链接（如 https://example.com 或 /files/）" maxlength="500">
+            <textarea id="homecard-modal-desc" class="fb-modal-textarea" placeholder="内容简介（可选）" maxlength="2000"></textarea>
+            <p class="fb-modal-hint" id="homecard-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="homecard-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="homecard-modal-confirm">添加</button>
+            </div>
+        </div>
+    </div>
+
     <script src="/js/layout.js"></script>
     <script src="/js/pinned.js?v=4"></script>
+    <script src="/js/homecards.js?v=1"></script>
     <script>
     (function () {
         var card = document.querySelector('.card-todo');

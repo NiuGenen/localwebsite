@@ -15,12 +15,13 @@
   - 页面可**贴到首页**形成导航卡片（仅本机可操作，卡片对所有访客可见）。
   - 阅读视图同样提供**复制全文**按钮。
   - **创建 / 编辑 / 上传 / 删除 / 贴首页** 均**仅限本机**；查看对所有局域网用户开放。
+- **自定义网页卡片**：在首页添加自定义网页卡片（标题 + 内容简介 + 目标网页链接），统一使用 🌐 logo；点击「进入网页」按钮**新标签页**打开目标地址（支持外链 `http(s)://` 与站内 `/` 相对路径）。**仅本机可添加/编辑/删除**，卡片对所有局域网访客可见（服务端持久化 `site/links.json`）。
 - **待办事项**：服务端持久化（`site/todo.json`），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
 - **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`site/features.json`），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
   - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
-- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」的管理入口仅在 localhost 访问时显示。
+- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」的管理入口仅在 localhost 访问时显示。
 
 ## 架构
 
@@ -44,7 +45,7 @@
 │   ├── disable-systemd.sh  # 取消开机自启
 │   └── unsetup-systemd.sh  # 移除 systemd 服务
 └── site/
-    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片）
+    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片、自定义网页卡片）
     ├── files/
     │   └── index.html  # 文件浏览器（SPA，含 md 阅读入口）
     ├── reader.html     # Markdown 阅读器（支持图片与相对链接）
@@ -56,10 +57,11 @@
     ├── files/          # 共享文件目录（gitignored）
     ├── custom/         # 自定义页面文件目录（gitignored）
     ├── custom_pages.json  # 自定义页面元数据（gitignored）
-    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js 等）
+    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js、homecards.js 等）
     ├── css/style.css   # 全局样式
     ├── todo.json       # 待办数据文件（gitignored）
-    └── features.json   # 实用功能数据文件（gitignored）
+    ├── features.json   # 实用功能数据文件（gitignored）
+    └── links.json      # 首页自定义网页卡片数据文件（gitignored）
 └── skill/
     └── local-features/ # 本地功能库技能（features.sh 维护脚本 + SKILL.md）
 ```
@@ -91,6 +93,7 @@
 | `TODO_FILE` | 待办数据文件路径（`site/todo.json`） |
 | `PRIORITIES` | 待办优先级白名单（`high` / `medium` / `low`） |
 | `FEATURES_FILE` | 实用功能数据文件路径（`site/features.json`） |
+| `LINKS_FILE` | 首页自定义网页卡片数据文件（`site/links.json`） |
 | `CUSTOM_PAGES_FILE` | 自定义页面元数据文件（`site/custom_pages.json`） |
 | `CUSTOM_DIR` | 自定义页面文件根目录（`site/custom/`） |
 | `DOC_EXTS` / `IMAGE_EXTS` | 自定义页面上传允许的文档（`.md`）与图片扩展名（png/jpg/jpeg/gif/webp/bmp，不含 svg） |
@@ -120,11 +123,13 @@
 | PUT / DELETE | `/api/todo/<id>` | 更新 / 删除待办 |
 | GET / POST | `/api/features` | 实用功能列表（支持 `?q=` 服务端搜索）/ 创建（仅本机） |
 | PUT / DELETE | `/api/features/<id>` | 更新 / 删除实用功能（仅本机） |
+| GET / POST | `/api/links` | 首页自定义网页卡片列表（开放）/ 添加（仅本机） |
+| PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
 
 ## 安全与数据
 
 - **路径穿越防护**：`safe_join_soft` 规范化路径并校验前缀，上传文件名经 `basename` 检查。
 - **黑名单保护**：黑名单目录禁止上传、新建、移动、重命名。
-- **本机操作限制**：待办、实用功能、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机。
+- **本机操作限制**：待办、实用功能、自定义网页卡片、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机；首页自定义网页卡片列表读取对所有局域网访客开放。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。
-- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json` 均已加入 `.gitignore`，不入库。
+- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json` 均已加入 `.gitignore`，不入库。

@@ -1442,6 +1442,52 @@ footer {
     overflow: hidden;
 }
 
+/* ===== Homepage custom link cards (自定义网页) ===== */
+.homecards-head {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0.5rem 0 0;
+}
+.homecards-head h3 {
+    color: #2c3e50;
+    font-size: 1.05rem;
+}
+.homecards-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+#homecards {
+    display: contents;
+}
+.card-linkcard {
+    border-top-color: #2ecc71;
+}
+.card-linkcard p {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+.homecard-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+.homecard-edit-btn {
+    background: #3498db;
+}
+.homecard-edit-btn:hover {
+    background: #2980b9;
+}
+.fb-modal-input-gap {
+    margin-top: 0.6rem;
+}
+
 .btn-danger {
     background: #e74c3c;
 }
