@@ -4,6 +4,8 @@ import shutil
 import time
 import uuid
 import json
+import errno
+import socket
 import urllib.request
 from urllib.parse import quote
 from flask import Flask, request, jsonify
@@ -671,6 +673,20 @@ def api_peers_delete(peer_id):
     save_peers(new_peers)
     return jsonify({"success": True})
 
+def peer_conn_error(peer, exc):
+    """把连接节点失败映射为可操作的中文提示。"""
+    reason = getattr(exc, "reason", exc)
+    err = getattr(reason, "errno", None)
+    addr = "{}:{}".format(peer.get("host"), peer.get("port"))
+    if err in (errno.EHOSTUNREACH, errno.EHOSTDOWN):
+        return ("无法访问节点 {}：该机器可能开启了防火墙（未放行端口 {}）或已离线，"
+                "请在该机器上放行端口后重试。").format(addr, peer.get("port"))
+    if err in (errno.ECONNREFUSED, errno.ENETUNREACH, errno.ENETDOWN):
+        return "无法连接节点 {}：peer.py 可能未运行或端口被占用。".format(addr)
+    if isinstance(reason, socket.timeout) or err in (errno.ETIMEDOUT, errno.EAGAIN):
+        return "连接节点 {} 超时，请检查该机器网络。".format(addr)
+    return "无法连接节点 {}：{}".format(addr, reason)
+
 @app.route("/api/peers/<peer_id>/tree", methods=["GET"])
 def api_peers_tree(peer_id):
     peer = find_peer(peer_id)
@@ -687,7 +703,9 @@ def api_peers_tree(peer_id):
             data = json.loads(resp.read().decode("utf-8"))
             return jsonify(data)
     except urllib.error.URLError as e:
-        return jsonify({"error": "无法连接节点: {}".format(getattr(e, "reason", e))}), 502
+        return jsonify({"error": peer_conn_error(peer, e)}), 502
+    except socket.timeout:
+        return jsonify({"error": peer_conn_error(peer, "timeout")}), 502
     except (json.JSONDecodeError, ValueError):
         return jsonify({"error": "节点返回数据无效"}), 502
 

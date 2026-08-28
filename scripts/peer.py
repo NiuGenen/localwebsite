@@ -35,7 +35,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlparse
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 # 默认中心站与注册密钥（可按需修改，也可通过命令行参数覆盖）
 DEFAULT_CENTRAL = "http://192.168.8.65:8080"
@@ -341,7 +341,8 @@ def main():
     httpd = ThreadingHTTPServer((args.bind, port), PeerHandler)
     sys.stderr.write("PeerShare %s\n" % VERSION)
     sys.stderr.write("共享目录: %s\n" % root)
-    sys.stderr.write("监听地址: http://%s:%d\n" % (args.bind, port))
+    sys.stderr.write("绑定地址: %s:%d（0.0.0.0 表示监听所有网卡，局域网可访问）\n" % (args.bind, port))
+    sys.stderr.write("访问地址: http://%s:%d\n" % (host, port))
     sys.stderr.write("上报信息: 名称=%s IP=%s 端口=%d\n" % (args.name, host, port))
     sys.stderr.write("中心站: %s\n" % args.central)
     sys.stderr.write("心跳间隔: %ds\n" % args.interval)
