@@ -17,7 +17,7 @@
     function fillCommand() {
         if (onelinerEl) {
             onelinerEl.textContent = 'curl -O ' + window.location.protocol + '//' + window.location.host
-                + '/peer.py && python3 peer.py';
+                + '/peer.py && sudo python3 peer.py';
         }
         if (!cmdEl) return;
         cmdEl.textContent = '# 方式一：直接运行，共享脚本所在目录，机器名取本机主机名\n'

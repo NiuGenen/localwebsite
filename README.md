@@ -120,10 +120,10 @@
 
 ## 多机共享使用说明
 
-在任意局域网机器上（需 Python 3），一键下载并运行（共享脚本所在目录）：
+在任意局域网机器上（需 Python 3），一键下载并运行（共享脚本所在目录，`sudo` 以便自动放行防火墙端口）：
 
 ```bash
-curl -O http://<服务器IP>:8080/peer.py && python3 peer.py
+curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 ```
 
 也可先只下载、再按需选择运行方式（`central`、`secret`、`name`、端口均已内置默认值，无需填写）：
