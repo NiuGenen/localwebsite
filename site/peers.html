@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>局域网共享 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=18">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/peers.html" class="active">局域网共享</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="peers-intro">
+            <h2>局域网共享</h2>
+            <p>局域网内的各台机器可自行共享指定目录，这里汇总当前在线共享的机器及其目录，访客可直接浏览下载。</p>
+            <h3>如何共享你的目录</h3>
+            <p>下载下方脚本，在要共享的机器上运行即可（仅需 Python 3，无需安装其他依赖）。脚本以只读方式提供目录浏览与下载，你仍可像平时一样在本地管理目录内容。</p>
+            <p class="peers-download">
+                <a class="btn" href="/peer.py" download="peer.py">下载 peer.py</a>
+            </p>
+            <p>运行命令（<code>--central</code> 与 <code>--secret</code> 已按本站配置填好）：</p>
+            <pre id="peers-cmd"></pre>
+            <p class="peers-hint">提示：将 <code>--dir</code> 换成你要共享的目录；默认端口 9000，可用 <code>--port</code> 修改；机器上/下线约在一分钟内自动反映到本页。</p>
+        </section>
+
+        <section class="peers-panel">
+            <div class="peers-head">
+                <h2>在线共享机器</h2>
+                <span class="peers-count" id="peers-count"></span>
+            </div>
+            <div class="peers-grid" id="peers-grid"></div>
+            <p class="peers-loading" id="peers-loading">加载共享列表...</p>
+            <p class="peers-empty" id="peers-empty" style="display:none">当前没有在线共享的机器。运行上面脚本后，这里会自动出现。</p>
+            <p class="peers-error" id="peers-error" style="display:none"></p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/peers.js?v=1"></script>
+</body>
+</html>

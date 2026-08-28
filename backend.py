@@ -4,6 +4,8 @@ import shutil
 import time
 import uuid
 import json
+import urllib.request
+from urllib.parse import quote
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
@@ -23,6 +25,11 @@ FEATURES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site",
 
 # ===== 首页自定义网页卡片数据文件 =====
 LINKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "links.json")
+
+# ===== 局域网共享节点（peer）注册表 =====
+PEERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "peers.json")
+PEER_SECRET = "e9f41c66bf7fbb56ee05cd6775944749"
+PEER_TTL = 90  # 在线判定阈值（秒），需大于 peer 心跳间隔
 
 # ===== 自定义页面数据 =====
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
@@ -545,6 +552,135 @@ def api_links_delete(link_id):
         return jsonify({"error": "卡片不存在"}), 404
     save_links(new_links)
     return jsonify({"success": True})
+
+# ===== 局域网共享节点（peer）API =====
+
+def load_peers():
+    try:
+        with open(PEERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_peers(peers):
+    tmp = PEERS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(peers, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, PEERS_FILE)
+
+def find_peer(peer_id):
+    for p in load_peers():
+        if p["id"] == peer_id:
+            return p
+    return None
+
+def peer_online(peer):
+    return (int(time.time()) - (peer.get("last_seen") or 0)) <= PEER_TTL
+
+@app.route("/api/peers/register", methods=["POST"])
+def api_peers_register():
+    data = request.get_json() or {}
+    secret = (data.get("secret") or "").strip()
+    if not PEER_SECRET or secret != PEER_SECRET:
+        return jsonify({"error": "注册密钥不正确"}), 403
+    name = (data.get("name") or "").strip()
+    host = (data.get("host") or "").strip()
+    port = data.get("port")
+    dir_label = (data.get("dir_label") or "").strip()
+    if not name:
+        return jsonify({"error": "节点名称不能为空"}), 400
+    if len(name) > 50:
+        return jsonify({"error": "节点名称过长"}), 400
+    if not host:
+        return jsonify({"error": "IP 地址不能为空"}), 400
+    if len(host) > 100:
+        return jsonify({"error": "IP 地址过长"}), 400
+    if not isinstance(port, int) or not (1 <= port <= 65535):
+        return jsonify({"error": "端口无效"}), 400
+    if len(dir_label) > 200:
+        return jsonify({"error": "共享目录描述过长"}), 400
+
+    now = int(time.time())
+    peers = load_peers()
+    for p in peers:
+        if p.get("host") == host and p.get("port") == port:
+            p["name"] = name
+            p["dir_label"] = dir_label
+            p["last_seen"] = now
+            save_peers(peers)
+            return jsonify(p)
+    peer = {
+        "id": uuid.uuid4().hex[:12],
+        "name": name,
+        "host": host,
+        "port": port,
+        "dir_label": dir_label,
+        "first_seen": now,
+        "last_seen": now,
+    }
+    peers.append(peer)
+    save_peers(peers)
+    return jsonify(peer), 201
+
+@app.route("/api/peers", methods=["GET"])
+def api_peers_list():
+    peers = load_peers()
+    now = int(time.time())
+    result = []
+    for p in peers:
+        online = peer_online(p)
+        result.append({
+            "id": p.get("id"),
+            "name": p.get("name"),
+            "host": p.get("host"),
+            "port": p.get("port"),
+            "dir_label": p.get("dir_label"),
+            "first_seen": p.get("first_seen"),
+            "last_seen": p.get("last_seen"),
+            "online": online,
+        })
+    result.sort(key=lambda p: (not p["online"], p["name"] or ""))
+    return jsonify(result)
+
+@app.route("/api/peers/info", methods=["GET"])
+def api_peers_info():
+    return jsonify({
+        "secret": PEER_SECRET,
+        "ttl": PEER_TTL,
+        "script": "/peer.py",
+    })
+
+@app.route("/api/peers/<peer_id>", methods=["DELETE"])
+def api_peers_delete(peer_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    peers = load_peers()
+    new_peers = [p for p in peers if p["id"] != peer_id]
+    if len(new_peers) == len(peers):
+        return jsonify({"error": "节点不存在"}), 404
+    save_peers(new_peers)
+    return jsonify({"success": True})
+
+@app.route("/api/peers/<peer_id>/tree", methods=["GET"])
+def api_peers_tree(peer_id):
+    peer = find_peer(peer_id)
+    if not peer:
+        return jsonify({"error": "节点不存在"}), 404
+    if not peer_online(peer):
+        return jsonify({"error": "节点离线"}), 503
+    path = (request.args.get("path") or "").strip().strip("/")
+    url = "http://{}:{}/api/peertree".format(peer["host"], peer["port"])
+    if path:
+        url += "?path=" + quote(path, safe="/")
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return jsonify(data)
+    except urllib.error.URLError as e:
+        return jsonify({"error": "无法连接节点: {}".format(getattr(e, "reason", e))}), 502
+    except (json.JSONDecodeError, ValueError):
+        return jsonify({"error": "节点返回数据无效"}), 502
 
 # ===== 自定义页面 API =====
 

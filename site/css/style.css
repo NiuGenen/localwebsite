@@ -1617,5 +1617,165 @@ footer {
     }
 }
 
+/* ===== 局域网共享（peers）===== */
+.card-peers {
+    border-top-color: #e67e22;
+}
+.peers-intro {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    padding: 1.75rem 1.5rem;
+    margin-bottom: 1.25rem;
+}
+.peers-intro h2 {
+    color: #2c3e50;
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+}
+.peers-intro h3 {
+    color: #2c3e50;
+    font-size: 1.05rem;
+    margin: 1.25rem 0 0.5rem;
+}
+.peers-intro p {
+    color: #666;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    margin-bottom: 0.6rem;
+}
+.peers-intro code {
+    background: #f0f0f0;
+    padding: 0.15em 0.4em;
+    border-radius: 3px;
+    font-family: "Fira Code", "Cascadia Code", Menlo, monospace;
+    font-size: 0.88em;
+}
+.peers-intro pre {
+    background: #f6f8fa;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 0.9em 1em;
+    overflow-x: auto;
+    font-family: "Fira Code", "Cascadia Code", Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    color: #333;
+    margin: 0.5rem 0;
+}
+.peers-download {
+    margin: 1rem 0 0.25rem;
+}
+.peers-hint {
+    font-size: 0.85rem !important;
+    color: #999 !important;
+}
+.peers-panel {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1.5rem;
+}
+.peers-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+.peers-head h2 {
+    color: #2c3e50;
+    font-size: 1.2rem;
+}
+.peers-count {
+    font-size: 0.85rem;
+    color: #999;
+}
+.peers-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.25rem;
+}
+.peer-card {
+    border-top-color: #e67e22;
+}
+.peer-card .btn {
+    align-self: flex-start;
+}
+.peer-card.peer-offline {
+    opacity: 0.65;
+    border-top-color: #bdc3c7;
+}
+.peer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.peer-head .card-icon {
+    margin-bottom: 0.5rem;
+}
+.peer-status {
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    white-space: nowrap;
+}
+.peer-status-on {
+    background: #eafaf1;
+    color: #1e8449;
+}
+.peer-status-off {
+    background: #eef0f1;
+    color: #7f8c8d;
+}
+.peer-card h3 {
+    margin-bottom: 0.35rem;
+}
+.peer-meta {
+    font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+    font-size: 0.85rem;
+    color: #555;
+    margin-bottom: 0.4rem;
+}
+.peer-dir {
+    font-size: 0.88rem;
+    color: #666;
+    word-break: break-all;
+    margin-bottom: 0.3rem;
+}
+.peer-seen {
+    font-size: 0.78rem;
+    color: #aaa;
+    margin-bottom: 0.9rem;
+}
+.peers-loading,
+.peers-empty {
+    text-align: center;
+    color: #999;
+    font-size: 0.9rem;
+    padding: 1.5rem 0;
+}
+.peers-error {
+    margin-top: 1rem;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    background: #fdedec;
+    color: #c0392b;
+    font-size: 0.9rem;
+}
+.fb-peer-title {
+    font-size: 0.9rem;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 40vw;
+}
+@media (max-width: 600px) {
+    .peers-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 
 

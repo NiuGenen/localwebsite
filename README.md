@@ -16,6 +16,11 @@
   - 阅读视图同样提供**复制全文**按钮。
   - **创建 / 编辑 / 上传 / 删除 / 贴首页** 均**仅限本机**；查看对所有局域网用户开放。
 - **自定义网页卡片**：在首页添加自定义网页卡片（标题 + 内容简介 + 目标网页链接），统一使用 🌐 logo；点击「进入网页」按钮**新标签页**打开目标地址（支持外链 `http(s)://` 与站内 `/` 相对路径）。**仅本机可添加/编辑/删除**，卡片对所有局域网访客可见（服务端持久化 `site/links.json`）。
+- **多机局域网共享**：局域网内任意机器可运行 `scripts/peer.py`（仅 Python 标准库）以只读方式共享一个目录，并每 30s 向中心站心跳注册；中心站「局域网共享」门户（`peers.html`）汇总在线机器与其共享目录，供访客统一浏览下载。
+  - 目录列表由中心站**服务端转发**（`/api/peers/<id>/tree`，无 CORS 问题）；文件**下载直连各机器**（`http://<机器IP>:<端口>/files/...`，不占中心站带宽，支持 Range 断点续传/视频拖进度条）。
+  - 门户页提供 `peer.py` 下载与运行说明；各机器本地照常管理目录内容，网页端只读。
+  - 注册密钥 `PEER_SECRET` 校验，防止局域网内他人伪造共享源；密钥对门户访客可见（便于自服务部署）。
+  - 在线判定 `PEER_TTL`（默认 90s，即 3 个心跳周期）；离线节点自动标记为「离线」。
 - **待办事项**：服务端持久化（`site/todo.json`），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
 - **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`site/features.json`），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
   - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
@@ -27,8 +32,8 @@
 
 | 组件 | 端口 | 职责 |
 |---|---|---|
-| Nginx | 8080 | 静态页面、`/files/` autoindex、`/api/` 反向代理到 Flask、todo 页/API 与 features 页/API 仅限 localhost |
-| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、新建、移动、重命名、自定义页面、待办、实用功能、本机判定） |
+| Nginx | 8080 | 静态页面、`/files/` autoindex、`/peer.py` 脚本下发、`/api/` 反向代理到 Flask、todo 页/API 与 features 页/API 仅限 localhost |
+| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、新建、移动、重命名、自定义页面、待办、实用功能、局域网共享节点注册与转发、本机判定） |
 
 ## 目录结构
 
@@ -43,12 +48,15 @@
 │   ├── setup-systemd.sh    # 配置开机自启
 │   ├── check-services.sh   # 检测服务状态
 │   ├── disable-systemd.sh  # 取消开机自启
-│   └── unsetup-systemd.sh  # 移除 systemd 服务
+│   ├── unsetup-systemd.sh  # 移除 systemd 服务
+│   └── peer.py             # 局域网共享节点脚本（可分发到各机器运行）
 └── site/
-    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片、自定义网页卡片）
+    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片、自定义网页卡片、局域网共享入口）
     ├── files/
     │   └── index.html  # 文件浏览器（SPA，含 md 阅读入口）
     ├── reader.html     # Markdown 阅读器（支持图片与相对链接）
+    ├── peers.html      # 局域网共享门户（peer.py 下载与运行说明 + 在线机器列表）
+    ├── peer.html       # 远程机器只读文件浏览器（列表 + 下载）
     ├── pages.html      # 自定义页面列表（创建、贴首页）
     ├── custom.html     # 自定义页面查看（页面文件浏览器 + 阅读）
     ├── todo.html       # 待办事项页面
@@ -57,11 +65,12 @@
     ├── files/          # 共享文件目录（gitignored）
     ├── custom/         # 自定义页面文件目录（gitignored）
     ├── custom_pages.json  # 自定义页面元数据（gitignored）
-    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js、homecards.js 等）
+    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js、homecards.js、peers.js、peer.js 等）
     ├── css/style.css   # 全局样式
     ├── todo.json       # 待办数据文件（gitignored）
     ├── features.json   # 实用功能数据文件（gitignored）
-    └── links.json      # 首页自定义网页卡片数据文件（gitignored）
+    ├── links.json      # 首页自定义网页卡片数据文件（gitignored）
+    └── peers.json      # 局域网共享节点注册表（gitignored）
 └── skill/
     └── local-features/ # 本地功能库技能（features.sh 维护脚本 + SKILL.md）
 ```
@@ -94,6 +103,9 @@
 | `PRIORITIES` | 待办优先级白名单（`high` / `medium` / `low`） |
 | `FEATURES_FILE` | 实用功能数据文件路径（`site/features.json`） |
 | `LINKS_FILE` | 首页自定义网页卡片数据文件（`site/links.json`） |
+| `PEERS_FILE` | 局域网共享节点注册表（`site/peers.json`） |
+| `PEER_SECRET` | 节点注册密钥（`openssl rand -hex 16` 生成；门户页对访客展示，便于自服务部署） |
+| `PEER_TTL` | 节点在线判定阈值秒数（默认 90，需大于心跳间隔） |
 | `CUSTOM_PAGES_FILE` | 自定义页面元数据文件（`site/custom_pages.json`） |
 | `CUSTOM_DIR` | 自定义页面文件根目录（`site/custom/`） |
 | `DOC_EXTS` / `IMAGE_EXTS` | 自定义页面上传允许的文档（`.md`）与图片扩展名（png/jpg/jpeg/gif/webp/bmp，不含 svg） |
@@ -101,7 +113,22 @@
 ### nginx.conf
 
 - `/todo.html`、`/features.html` 与 `/api/todo`、`/api/features`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
+- `/peer.py`：直接下发 `scripts/peer.py`（单一来源，供各机器下载运行）
 - `/api/`：反向代理到 Flask，`client_max_body_size 100m`（上传大小限制）
+
+## 多机共享使用说明
+
+在任意局域网机器上（需 Python 3）：
+
+```bash
+curl -O http://<服务器IP>:8080/peer.py
+python3 peer.py --dir /path/to/share --port 9000 --name "我的机器" \
+    --central http://<服务器IP>:8080 --secret <注册密钥>
+```
+
+- 密钥与运行命令也可在中心站「局域网共享」页面（`/peers.html`）直接查看复制。
+- 默认每 30s 心跳注册，机器上线/离线约 1 分钟内反映；默认端口 9000，`--port` 可改。
+- 更多参数见 `python3 peer.py --help`。
 
 ## API 一览
 
@@ -125,11 +152,25 @@
 | PUT / DELETE | `/api/features/<id>` | 更新 / 删除实用功能（仅本机） |
 | GET / POST | `/api/links` | 首页自定义网页卡片列表（开放）/ 添加（仅本机） |
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
+| POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |
+| GET | `/api/peers` | 局域网共享节点列表（开放，含 `online` 状态） |
+| GET | `/api/peers/info` | 门户信息（注册密钥、TTL、脚本路径，开放） |
+| GET | `/api/peers/<id>/tree?path=` | 服务端转发节点目录列表（开放；节点离线返回 503） |
+| DELETE | `/api/peers/<id>` | 移除节点（仅本机） |
+
+### 节点 HTTP 接口（peer.py）
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/api/peertree?path=` | 目录 JSON 列表（与 `/api/files` 同构） |
+| GET | `/files/*` | 文件下载（支持 Range/206、HEAD，只读） |
+| GET | `/` | 服务信息 |
 
 ## 安全与数据
 
 - **路径穿越防护**：`safe_join_soft` 规范化路径并校验前缀，上传文件名经 `basename` 检查。
 - **黑名单保护**：黑名单目录禁止上传、新建、移动、重命名。
 - **本机操作限制**：待办、实用功能、自定义网页卡片、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机；首页自定义网页卡片列表读取对所有局域网访客开放。
+- **节点注册鉴权**：局域网共享节点必须携带 `PEER_SECRET` 注册，否则 403；目录列表转发仅访问注册表中存在的节点（`host/port` 只取自注册表），路径由节点侧再次校验防穿越。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。
-- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json` 均已加入 `.gitignore`，不入库。
+- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json`、`site/peers.json` 均已加入 `.gitignore`，不入库。
