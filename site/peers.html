@@ -31,6 +31,23 @@
             <p class="peers-hint">提示：不指定 <code>--dir</code> 时共享脚本所在目录；不指定 <code>--port</code> 时自动从 9000 起探测可用端口；机器上/下线约在一分钟内自动反映到本页。更多参数见 <code>python3 peer.py --help</code>。</p>
         </section>
 
+        <section class="peers-intro">
+            <h3>防火墙说明（重要）</h3>
+            <p>多数 Linux 发行版默认开启防火墙（firewalld / ufw），且只放行少数端口（如 ssh），其它端口一律拦截。若运行后门户显示「在线」但无法浏览/下载，通常是本机防火墙未放行 peer 端口。</p>
+            <ul class="peers-fw-list">
+                <li><strong>用 root 运行</strong> <code>sudo python3 peer.py</code>：脚本会自动放行所选端口（关闭时自动移除规则），无需手动操作。</li>
+                <li><strong>用普通用户运行</strong>：脚本会打印放行命令提示，手动执行一次即可；命令格式（以端口 9000 为例）：
+                    <pre># firewalld（CentOS/Rocky/Fedora 等）
+sudo firewall-cmd --permanent --add-port=9000/tcp
+sudo firewall-cmd --reload
+
+# ufw（Ubuntu/Debian 等）
+sudo ufw allow 9000/tcp</pre>
+                </li>
+            </ul>
+            <p class="peers-hint">若自定义了 <code>--port</code>，请把命令中的 9000 换成实际端口；修改端口后需重新放行。</p>
+        </section>
+
         <section class="peers-panel">
             <div class="peers-head">
                 <h2>在线共享机器</h2>

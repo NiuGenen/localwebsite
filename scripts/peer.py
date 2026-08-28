@@ -21,13 +21,19 @@
     --host     手动指定上报的 IP（默认自动探测）
     --interval 心跳间隔秒数，默认 30
     --bind     绑定地址，默认 0.0.0.0
+
+防火墙:
+    若本机启用了 firewalld/ufw，默认会拦截未放行的端口。以 root 运行时本脚本
+    会自动放行所选端口；以普通用户运行时请按启动提示的命令手动放行。
 """
 import argparse
 import json
 import mimetypes
 import os
 import signal
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -35,7 +41,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlparse
 
-VERSION = "1.3"
+VERSION = "1.4"
 
 # 默认中心站与注册密钥（可按需修改，也可通过命令行参数覆盖）
 DEFAULT_CENTRAL = "http://192.168.8.65:8080"
@@ -53,6 +59,69 @@ def find_free_port(start=9000, attempts=100):
             except OSError:
                 continue
     return 0
+
+
+# ===== 防火墙处理（firewalld / ufw）=====
+
+def is_root():
+    try:
+        return os.geteuid() == 0
+    except AttributeError:
+        return False
+
+
+def _which(name):
+    try:
+        return shutil.which(name)
+    except Exception:
+        return None
+
+
+def _run(cmd):
+    try:
+        return subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=20)
+    except Exception:
+        return None
+
+
+def detect_firewall():
+    """检测本机是否启用了常见防火墙。返回 {'type': 'firewalld'|'ufw'} 或 None。"""
+    if _which("firewall-cmd"):
+        r = _run(["systemctl", "is-active", "firewalld"])
+        if r and r.returncode == 0 and (r.stdout or b"").strip() == b"active":
+            return {"type": "firewalld"}
+    if _which("ufw"):
+        r = _run(["ufw", "status"])
+        if r and b"Status: active" in (r.stdout or b""):
+            return {"type": "ufw"}
+    return None
+
+
+def firewall_change(fw_type, port, action):
+    """action 为 'allow' 或 'disallow'，修改防火墙端口规则。返回 (成功?, 说明)。"""
+    if fw_type == "firewalld":
+        flag = "add" if action == "allow" else "remove"
+        r = _run(["firewall-cmd", "--permanent", "%s-port=%d/tcp" % (flag, port)])
+        if not r or r.returncode != 0:
+            return False, "firewall-cmd %s-port=%d/tcp 执行失败" % (flag, port)
+        _run(["firewall-cmd", "--reload"])
+        return True, "firewalld"
+    if fw_type == "ufw":
+        cmd = ["ufw"] + (["delete"] if action == "disallow" else []) + ["allow", "%d/tcp" % port]
+        r = _run(cmd)
+        if not r or r.returncode != 0:
+            return False, " ".join(cmd) + " 执行失败"
+        return True, "ufw"
+    return False, "未知防火墙"
+
+
+def firewall_hint(fw_type, port):
+    """非 root 运行时提示给用户的放行命令。"""
+    if fw_type == "firewalld":
+        return "sudo firewall-cmd --permanent --add-port=%d/tcp && sudo firewall-cmd --reload" % port
+    if fw_type == "ufw":
+        return "sudo ufw allow %d/tcp" % port
+    return ""
 
 
 def detect_lan_ip(central):
@@ -328,15 +397,38 @@ def main():
     PeerHandler.root = root
 
     stop_event = threading.Event()
+    fw_state = {"port_allowed": False, "fw_type": None}
 
     def shutdown(signum, frame):
         sys.stderr.write("\n正在停止...\n")
         stop_event.set()
+        if fw_state["port_allowed"]:
+            ok, detail = firewall_change(fw_state["fw_type"], port, "disallow")
+            sys.stderr.write("[firewall] %s（端口 %d）\n" % ("已移除自动放行规则" if ok else "移除失败: " + detail, port))
         unregister(args.central, args.secret, host, port)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
+
+    # 防火墙处理：回环绑定无需放行
+    if args.bind not in ("127.0.0.1", "::1", "localhost"):
+        fw = detect_firewall()
+        if fw:
+            fw_type = fw["type"]
+            fw_state["fw_type"] = fw_type
+            if is_root():
+                ok, detail = firewall_change(fw_type, port, "allow")
+                if ok:
+                    fw_state["port_allowed"] = True
+                    sys.stderr.write("已自动放行端口 %d（%s）\n" % (port, detail))
+                else:
+                    sys.stderr.write("自动放行端口 %d 失败，请手动执行:\n  %s\n" % (port, detail))
+            else:
+                sys.stderr.write(
+                    "警告: 检测到本机启用 %s 防火墙，端口 %d 可能被拦截，局域网其他机器将无法访问。\n"
+                    "      放行方法（需要 root）: %s\n"
+                    % (fw_type, port, firewall_hint(fw_type, port)))
 
     httpd = ThreadingHTTPServer((args.bind, port), PeerHandler)
     sys.stderr.write("PeerShare %s\n" % VERSION)
