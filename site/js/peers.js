@@ -5,6 +5,7 @@
     var errorEl = document.getElementById('peers-error');
     var countEl = document.getElementById('peers-count');
     var cmdEl = document.getElementById('peers-cmd');
+    var onelinerEl = document.getElementById('peers-oneliner');
     var peers = [];
     var loadTimer = null;
 
@@ -14,6 +15,10 @@
     }
 
     function fillCommand() {
+        if (onelinerEl) {
+            onelinerEl.textContent = 'curl -O ' + window.location.protocol + '//' + window.location.host
+                + '/peer.py && python3 peer.py';
+        }
         if (!cmdEl) return;
         cmdEl.textContent = '# 方式一：直接运行，共享脚本所在目录，机器名取本机主机名\n'
             + 'python3 peer.py\n\n'
