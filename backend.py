@@ -643,6 +643,23 @@ def api_peers_list():
     result.sort(key=lambda p: (not p["online"], p["name"] or ""))
     return jsonify(result)
 
+@app.route("/api/peers/unregister", methods=["POST"])
+def api_peers_unregister():
+    data = request.get_json() or {}
+    secret = (data.get("secret") or "").strip()
+    if not PEER_SECRET or secret != PEER_SECRET:
+        return jsonify({"error": "注册密钥不正确"}), 403
+    host = (data.get("host") or "").strip()
+    port = data.get("port")
+    if not host or not isinstance(port, int):
+        return jsonify({"error": "参数无效"}), 400
+    peers = load_peers()
+    new_peers = [p for p in peers if not (p.get("host") == host and p.get("port") == port)]
+    if len(new_peers) == len(peers):
+        return jsonify({"error": "节点不存在"}), 404
+    save_peers(new_peers)
+    return jsonify({"success": True})
+
 @app.route("/api/peers/<peer_id>", methods=["DELETE"])
 def api_peers_delete(peer_id):
     if not require_local():

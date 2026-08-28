@@ -34,7 +34,13 @@
         <section class="peers-panel">
             <div class="peers-head">
                 <h2>在线共享机器</h2>
-                <span class="peers-count" id="peers-count"></span>
+                <div class="peers-head-right">
+                    <label class="peers-toggle" title="勾选后同时显示离线机器">
+                        <input type="checkbox" id="peers-show-offline">
+                        <span>显示离线</span>
+                    </label>
+                    <span class="peers-count" id="peers-count"></span>
+                </div>
             </div>
             <div class="peers-grid" id="peers-grid"></div>
             <p class="peers-loading" id="peers-loading">加载共享列表...</p>

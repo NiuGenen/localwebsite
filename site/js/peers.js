@@ -5,7 +5,9 @@
     var errorEl = document.getElementById('peers-error');
     var countEl = document.getElementById('peers-count');
     var cmdEl = document.getElementById('peers-cmd');
+    var toggleEl = document.getElementById('peers-show-offline');
     var peers = [];
+    var showOffline = false;
     var loadTimer = null;
 
     function setError(msg) {
@@ -32,17 +34,21 @@
     }
 
     function render() {
+        var visible = showOffline ? peers : peers.filter(function (p) { return p.online; });
         gridEl.innerHTML = '';
-        countEl.textContent = peers.length + ' 台机器';
+        countEl.textContent = visible.length + ' 台机器';
 
-        if (peers.length === 0) {
+        if (visible.length === 0) {
             emptyEl.style.display = '';
+            emptyEl.textContent = showOffline
+                ? '当前没有共享机器。运行上面脚本后，这里会自动出现。'
+                : '当前没有在线共享的机器。运行上面脚本后，这里会自动出现。';
             countEl.textContent = '';
             return;
         }
         emptyEl.style.display = 'none';
 
-        peers.forEach(function (p) {
+        visible.forEach(function (p) {
             var card = document.createElement('div');
             card.className = 'card peer-card' + (p.online ? '' : ' peer-offline');
 
@@ -112,6 +118,12 @@
     }
 
     fillCommand();
+    if (toggleEl) {
+        toggleEl.addEventListener('change', function () {
+            showOffline = toggleEl.checked;
+            render();
+        });
+    }
     loadPeers();
     loadTimer = setInterval(loadPeers, 15000);
 })();

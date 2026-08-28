@@ -35,7 +35,7 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlparse
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 # 默认中心站与注册密钥（可按需修改，也可通过命令行参数覆盖）
 DEFAULT_CENTRAL = "http://192.168.8.65:8080"
@@ -265,6 +265,22 @@ class PeerHandler(BaseHTTPRequestHandler):
             pass
 
 
+def unregister(central, secret, host, port):
+    """主动关闭时通知中心站移除本节点，实现快速下线。"""
+    url = central.rstrip("/") + "/api/peers/unregister"
+    payload = {"secret": secret, "host": host, "port": port}
+    try:
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"),
+                                     headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            if 200 <= resp.getcode() < 300:
+                sys.stderr.write("[unregister] ok\n")
+            else:
+                sys.stderr.write("[unregister] failed HTTP %s\n" % resp.getcode())
+    except Exception as e:
+        sys.stderr.write("[unregister] error: %s\n" % e)
+
+
 def heartbeat(central, secret, name, host, port, dir_label, interval, stop_event):
     url = central.rstrip("/") + "/api/peers/register"
     payload = {
@@ -316,6 +332,7 @@ def main():
     def shutdown(signum, frame):
         sys.stderr.write("\n正在停止...\n")
         stop_event.set()
+        unregister(args.central, args.secret, host, port)
         sys.exit(0)
 
     signal.signal(signal.SIGINT, shutdown)
