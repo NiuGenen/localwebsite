@@ -628,10 +628,11 @@ def api_peers_register():
 @app.route("/api/peers", methods=["GET"])
 def api_peers_list():
     peers = load_peers()
-    now = int(time.time())
+    online = [p for p in peers if peer_online(p)]
+    if len(online) != len(peers):
+        save_peers(online)
     result = []
-    for p in peers:
-        online = peer_online(p)
+    for p in online:
         result.append({
             "id": p.get("id"),
             "name": p.get("name"),
@@ -640,9 +641,9 @@ def api_peers_list():
             "dir_label": p.get("dir_label"),
             "first_seen": p.get("first_seen"),
             "last_seen": p.get("last_seen"),
-            "online": online,
+            "online": True,
         })
-    result.sort(key=lambda p: (not p["online"], p["name"] or ""))
+    result.sort(key=lambda p: p["name"] or "")
     return jsonify(result)
 
 @app.route("/api/peers/unregister", methods=["POST"])

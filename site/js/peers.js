@@ -5,9 +5,7 @@
     var errorEl = document.getElementById('peers-error');
     var countEl = document.getElementById('peers-count');
     var cmdEl = document.getElementById('peers-cmd');
-    var toggleEl = document.getElementById('peers-show-offline');
     var peers = [];
-    var showOffline = false;
     var loadTimer = null;
 
     function setError(msg) {
@@ -34,23 +32,20 @@
     }
 
     function render() {
-        var visible = showOffline ? peers : peers.filter(function (p) { return p.online; });
         gridEl.innerHTML = '';
-        countEl.textContent = visible.length + ' 台机器';
+        countEl.textContent = peers.length + ' 台机器';
 
-        if (visible.length === 0) {
+        if (peers.length === 0) {
             emptyEl.style.display = '';
-            emptyEl.textContent = showOffline
-                ? '当前没有共享机器。运行上面脚本后，这里会自动出现。'
-                : '当前没有在线共享的机器。运行上面脚本后，这里会自动出现。';
+            emptyEl.textContent = '当前没有在线共享的机器。运行上面脚本后，这里会自动出现。';
             countEl.textContent = '';
             return;
         }
         emptyEl.style.display = 'none';
 
-        visible.forEach(function (p) {
+        peers.forEach(function (p) {
             var card = document.createElement('div');
-            card.className = 'card peer-card' + (p.online ? '' : ' peer-offline');
+            card.className = 'card peer-card';
 
             var head = document.createElement('div');
             head.className = 'peer-head';
@@ -60,8 +55,8 @@
             icon.textContent = '🖥️';
 
             var status = document.createElement('span');
-            status.className = 'peer-status ' + (p.online ? 'peer-status-on' : 'peer-status-off');
-            status.textContent = p.online ? '● 在线' : '○ 离线';
+            status.className = 'peer-status peer-status-on';
+            status.textContent = '● 在线';
 
             head.appendChild(icon);
             head.appendChild(status);
@@ -87,13 +82,11 @@
             card.appendChild(dir);
             card.appendChild(seen);
 
-            if (p.online) {
-                var btn = document.createElement('a');
-                btn.href = '/peer.html?id=' + encodeURIComponent(p.id);
-                btn.className = 'btn';
-                btn.textContent = '浏览共享';
-                card.appendChild(btn);
-            }
+            var btn = document.createElement('a');
+            btn.href = '/peer.html?id=' + encodeURIComponent(p.id);
+            btn.className = 'btn';
+            btn.textContent = '浏览共享';
+            card.appendChild(btn);
 
             gridEl.appendChild(card);
         });
@@ -118,12 +111,6 @@
     }
 
     fillCommand();
-    if (toggleEl) {
-        toggleEl.addEventListener('change', function () {
-            showOffline = toggleEl.checked;
-            render();
-        });
-    }
     loadPeers();
     loadTimer = setInterval(loadPeers, 15000);
 })();
