@@ -643,14 +643,6 @@ def api_peers_list():
     result.sort(key=lambda p: (not p["online"], p["name"] or ""))
     return jsonify(result)
 
-@app.route("/api/peers/info", methods=["GET"])
-def api_peers_info():
-    return jsonify({
-        "secret": PEER_SECRET,
-        "ttl": PEER_TTL,
-        "script": "/peer.py",
-    })
-
 @app.route("/api/peers/<peer_id>", methods=["DELETE"])
 def api_peers_delete(peer_id):
     if not require_local():

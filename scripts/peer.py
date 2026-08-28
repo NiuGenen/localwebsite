@@ -5,16 +5,19 @@
 以只读方式通过 HTTP 共享一个本地目录，并定期向中心站注册心跳，
 使目录出现在中心站「局域网共享」门户中。
 
-用法:
-    python3 peer.py --dir /path/to/share --port 9000 --name "我的机器" \
-                    --central http://192.168.8.65:8080 --secret <中心站密钥>
+用法（方式一）: 直接执行，共享脚本所在目录，使用默认机器名
+    python3 peer.py
+用法（方式二）: 指定共享目录，使用默认机器名
+    python3 peer.py --dir /path/to/share
+用法（方式三）: 指定共享目录与机器名
+    python3 peer.py --dir /path/to/share --name "我的机器"
 
-参数:
-    --dir      要共享的目录（必填）
-    --port     监听端口，默认 9000
-    --name     机器显示名称，默认取主机名
-    --central  中心站地址，如 http://192.168.8.65:8080
-    --secret   与中心站一致的注册密钥
+参数（均可省略，使用默认值）:
+    --dir      要共享的目录，默认脚本所在目录
+    --port     监听端口，默认自动探测可用端口（从 9000 起）
+    --name     机器显示名称，默认本机主机名
+    --central  中心站地址，默认 http://192.168.8.65:8080
+    --secret   与中心站一致的注册密钥（默认已内置）
     --host     手动指定上报的 IP（默认自动探测）
     --interval 心跳间隔秒数，默认 30
     --bind     绑定地址，默认 0.0.0.0
@@ -32,7 +35,24 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlparse
 
-VERSION = "1.0"
+VERSION = "1.1"
+
+# 默认中心站与注册密钥（可按需修改，也可通过命令行参数覆盖）
+DEFAULT_CENTRAL = "http://192.168.8.65:8080"
+DEFAULT_SECRET = "e9f41c66bf7fbb56ee05cd6775944749"
+
+
+def find_free_port(start=9000, attempts=100):
+    """探测从 start 起第一个可用的端口。"""
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                s.bind(("", port))
+                return port
+            except OSError:
+                continue
+    return 0
 
 
 def detect_lan_ip(central):
@@ -272,21 +292,22 @@ def heartbeat(central, secret, name, host, port, dir_label, interval, stop_event
 
 def main():
     ap = argparse.ArgumentParser(description="局域网共享节点（PeerShare）")
-    ap.add_argument("--dir", required=True, help="要共享的目录（必填）")
-    ap.add_argument("--port", type=int, default=9000, help="监听端口，默认 9000")
-    ap.add_argument("--name", default=socket.gethostname(), help="机器显示名称，默认主机名")
-    ap.add_argument("--central", required=True, help="中心站地址，如 http://192.168.8.65:8080")
-    ap.add_argument("--secret", required=True, help="与中心站一致的注册密钥")
+    ap.add_argument("--dir", default="", help="要共享的目录，默认脚本所在目录")
+    ap.add_argument("--port", type=int, default=None, help="监听端口，默认自动探测可用端口")
+    ap.add_argument("--name", default=socket.gethostname(), help="机器显示名称，默认本机主机名")
+    ap.add_argument("--central", default=DEFAULT_CENTRAL, help="中心站地址，默认 %s" % DEFAULT_CENTRAL)
+    ap.add_argument("--secret", default=DEFAULT_SECRET, help="与中心站一致的注册密钥（默认已内置）")
     ap.add_argument("--host", default="", help="手动指定上报的 IP（默认自动探测）")
     ap.add_argument("--interval", type=int, default=30, help="心跳间隔秒数，默认 30")
     ap.add_argument("--bind", default="0.0.0.0", help="绑定地址，默认 0.0.0.0")
     args = ap.parse_args()
 
-    root = os.path.abspath(args.dir)
+    root = os.path.abspath(args.dir or os.path.dirname(os.path.abspath(__file__)))
     if not os.path.isdir(root):
         sys.stderr.write("错误: 共享目录不存在: %s\n" % root)
         sys.exit(1)
 
+    port = args.port or find_free_port()
     host = args.host or detect_lan_ip(args.central)
     PeerHandler.root = root
 
@@ -300,16 +321,16 @@ def main():
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
-    httpd = ThreadingHTTPServer((args.bind, args.port), PeerHandler)
+    httpd = ThreadingHTTPServer((args.bind, port), PeerHandler)
     sys.stderr.write("PeerShare %s\n" % VERSION)
     sys.stderr.write("共享目录: %s\n" % root)
-    sys.stderr.write("监听地址: http://%s:%d\n" % (args.bind, args.port))
-    sys.stderr.write("上报信息: 名称=%s IP=%s 端口=%d\n" % (args.name, host, args.port))
+    sys.stderr.write("监听地址: http://%s:%d\n" % (args.bind, port))
+    sys.stderr.write("上报信息: 名称=%s IP=%s 端口=%d\n" % (args.name, host, port))
     sys.stderr.write("中心站: %s\n" % args.central)
     sys.stderr.write("心跳间隔: %ds\n" % args.interval)
 
     hb = threading.Thread(target=heartbeat, daemon=True,
-                          args=(args.central, args.secret, args.name, host, args.port,
+                          args=(args.central, args.secret, args.name, host, port,
                                 root, args.interval, stop_event))
     hb.start()
 

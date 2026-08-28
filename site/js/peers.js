@@ -13,30 +13,14 @@
         else { errorEl.style.display = 'none'; }
     }
 
-    function escHtml(s) {
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(s));
-        return div.innerHTML;
-    }
-
-    function buildCommand(central) {
-        return 'python3 peer.py --dir /path/to/share --port 9000 --name 我的机器 \\\n'
-            + '    --central ' + escHtml(central) + ' --secret <密钥>';
-    }
-
     function fillCommand() {
         if (!cmdEl) return;
-        var central = window.location.protocol + '//' + window.location.host;
-        fetch('/api/peers/info')
-            .then(function (r) { return r.json(); })
-            .then(function (info) {
-                var secret = (info && info.secret) || '<你的密钥>';
-                cmdEl.textContent = 'python3 peer.py --dir /path/to/share --port 9000 --name 我的机器 \\\n'
-                    + '    --central ' + central + ' --secret ' + secret;
-            })
-            .catch(function () {
-                cmdEl.textContent = buildCommand(central);
-            });
+        cmdEl.textContent = '# 方式一：直接运行，共享脚本所在目录，机器名取本机主机名\n'
+            + 'python3 peer.py\n\n'
+            + '# 方式二：指定共享目录，机器名默认\n'
+            + 'python3 peer.py --dir /path/to/share\n\n'
+            + '# 方式三：指定共享目录与机器名\n'
+            + 'python3 peer.py --dir /path/to/share --name "我的机器"';
     }
 
     function fmtSeen(ts) {

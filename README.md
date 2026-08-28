@@ -118,17 +118,23 @@
 
 ## 多机共享使用说明
 
-在任意局域网机器上（需 Python 3）：
+在任意局域网机器上（需 Python 3），先下载脚本：
 
 ```bash
 curl -O http://<服务器IP>:8080/peer.py
-python3 peer.py --dir /path/to/share --port 9000 --name "我的机器" \
-    --central http://<服务器IP>:8080 --secret <注册密钥>
 ```
 
+三种运行方式（`central`、`secret`、`name`、端口均已内置默认值，无需填写）：
+
+| 方式 | 命令 | 说明 |
+|---|---|---|
+| 1 | `python3 peer.py` | 共享脚本所在目录，机器名取本机主机名 |
+| 2 | `python3 peer.py --dir /path/to/share` | 指定共享目录，机器名默认 |
+| 3 | `python3 peer.py --dir /path/to/share --name "我的机器"` | 指定共享目录与机器名 |
+
+- 端口未指定时自动从 9000 起探测可用端口；默认每 30s 心跳注册，机器上线/离线约 1 分钟内反映。
+- 如需连接其他中心站或更换密钥，用 `--central` / `--secret` 覆盖；更多参数见 `python3 peer.py --help`。
 - 密钥与运行命令也可在中心站「局域网共享」页面（`/peers.html`）直接查看复制。
-- 默认每 30s 心跳注册，机器上线/离线约 1 分钟内反映；默认端口 9000，`--port` 可改。
-- 更多参数见 `python3 peer.py --help`。
 
 ## API 一览
 
@@ -154,7 +160,6 @@ python3 peer.py --dir /path/to/share --port 9000 --name "我的机器" \
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
 | POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |
 | GET | `/api/peers` | 局域网共享节点列表（开放，含 `online` 状态） |
-| GET | `/api/peers/info` | 门户信息（注册密钥、TTL、脚本路径，开放） |
 | GET | `/api/peers/<id>/tree?path=` | 服务端转发节点目录列表（开放；节点离线返回 503） |
 | DELETE | `/api/peers/<id>` | 移除节点（仅本机） |
 
