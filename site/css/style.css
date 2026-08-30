@@ -585,6 +585,34 @@ footer {
     color: #c0392b;
 }
 
+.fb-progress-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid #eee;
+    background: #fbfcfe;
+}
+.fb-progress-bar {
+    flex: 1;
+    height: 8px;
+    background: #eef0f1;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.fb-progress-fill {
+    width: 0%;
+    height: 100%;
+    background: #3498db;
+    border-radius: 4px;
+    transition: width 0.15s ease;
+}
+.fb-progress-text {
+    font-size: 0.85rem;
+    color: #555;
+    white-space: nowrap;
+}
+
 /* Modal */
 .fb-modal-overlay {
     position: fixed;

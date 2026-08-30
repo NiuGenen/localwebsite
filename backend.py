@@ -11,6 +11,7 @@ from urllib.parse import quote
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024 * 1024  # 上传上限 1GB，与 nginx client_max_body_size 对齐
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
