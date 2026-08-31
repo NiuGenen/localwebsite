@@ -711,6 +711,29 @@ def api_peers_tree(peer_id):
     except (json.JSONDecodeError, ValueError):
         return jsonify({"error": "节点返回数据无效"}), 502
 
+@app.route("/api/peers/<peer_id>/file", methods=["GET"])
+def api_peers_file(peer_id):
+    peer = find_peer(peer_id)
+    if not peer:
+        return jsonify({"error": "节点不存在"}), 404
+    if not peer_online(peer):
+        return jsonify({"error": "节点离线"}), 503
+    path = (request.args.get("path") or "").strip().strip("/")
+    if not path or not path.lower().endswith(".md"):
+        return jsonify({"error": "仅支持阅读 .md 文件"}), 400
+    url = "http://{}:{}/files/{}".format(peer["host"], peer["port"], quote(path, safe="/"))
+    try:
+        with urllib.request.urlopen(url, timeout=10) as resp:
+            data = resp.read(5 * 1024 * 1024 + 1)
+            if len(data) > 5 * 1024 * 1024:
+                return jsonify({"error": "文件过大（>5MB），暂不支持在线阅读"}), 413
+            return app.response_class(data.decode("utf-8", errors="replace"),
+                                      mimetype="text/plain; charset=utf-8")
+    except urllib.error.URLError as e:
+        return jsonify({"error": peer_conn_error(peer, e)}), 502
+    except socket.timeout:
+        return jsonify({"error": "读取节点文件超时"}), 502
+
 # ===== 自定义页面 API =====
 
 def load_pages():

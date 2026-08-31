@@ -7,10 +7,18 @@
     var pathEl = document.getElementById('fb-path');
     var countEl = document.getElementById('fb-count');
     var titleEl = document.getElementById('fb-peer-title');
+    var readerEl = document.getElementById('peer-reader');
+    var readerContent = document.getElementById('reader-content');
+    var readerFilename = document.getElementById('reader-filename');
+    var readerCopy = document.getElementById('peer-reader-copy');
+    var readerBack = document.getElementById('peer-reader-back');
 
     var peerId = new URLSearchParams(window.location.search).get('id') || '';
     var peer = null;
     var currentPath = '';
+    var peerBase = '';
+    var currentMdText = '';
+    var copyTimer = null;
 
     function getPath() {
         return window.location.hash.replace(/^#\/*/, '');
@@ -125,6 +133,17 @@
         var opTd = document.createElement('td');
         opTd.className = 'fb-col-op';
         if (entry.type === 'file') {
+            if (/\.md$/i.test(entry.name)) {
+                var read = document.createElement('button');
+                read.type = 'button';
+                read.className = 'fb-read-btn';
+                read.title = '在网页阅读';
+                read.innerHTML = '<i class="fas fa-book-open"></i>';
+                read.addEventListener('click', function () {
+                    openPeerReader(path ? path + '/' + entry.name : entry.name);
+                });
+                opTd.appendChild(read);
+            }
             var dl = document.createElement('a');
             dl.href = downloadUrl(filePath);
             dl.target = '_blank';
@@ -137,6 +156,106 @@
         tr.appendChild(opTd);
 
         return tr;
+    }
+
+    // ===== md 网页阅读 =====
+
+    function resolvePeerUrl(href) {
+        if (!href) return href;
+        if (/^(https?:)?\/\//i.test(href)) return href;
+        if (href.indexOf('data:') === 0) return href;
+        if (href.charAt(0) === '#') return href;
+        if (href.charAt(0) === '/') {
+            return 'http://' + peer.host + ':' + peer.port + '/files' + href;
+        }
+        return peerBase + href;
+    }
+
+    function setupReaderRenderer() {
+        marked.use({
+            renderer: {
+                image: function (token) {
+                    return marked.Renderer.prototype.image.call(this, Object.assign({}, token, { href: resolvePeerUrl(token.href) }));
+                },
+                link: function (token) {
+                    return marked.Renderer.prototype.link.call(this, Object.assign({}, token, { href: resolvePeerUrl(token.href) }));
+                }
+            }
+        });
+    }
+
+    function getFileName(path) {
+        var parts = path.replace(/\\/g, '/').split('/');
+        return parts[parts.length - 1] || path;
+    }
+
+    function openPeerReader(filePath) {
+        if (!readerEl) return;
+        var idx = filePath.lastIndexOf('/');
+        var baseDir = idx >= 0 ? filePath.slice(0, idx + 1) : '';
+        peerBase = 'http://' + peer.host + ':' + peer.port + '/files/' + baseDir;
+        readerFilename.textContent = getFileName(filePath);
+        readerContent.innerHTML = '<p style="color:#999;padding:1rem;">加载中...</p>';
+        readerEl.style.display = 'flex';
+
+        var url = '/api/peers/' + encodeURIComponent(peerId) + '/file?path=' + encodeURIComponent(filePath);
+        fetch(url)
+            .then(function (r) {
+                if (!r.ok) {
+                    return r.json().then(function (d) {
+                        throw new Error(d.error || ('HTTP ' + r.status));
+                    });
+                }
+                return r.text();
+            })
+            .then(function (mdText) {
+                currentMdText = mdText;
+                readerContent.innerHTML = marked.parse(mdText);
+                readerContent.querySelectorAll('pre code').forEach(function (block) {
+                    hljs.highlightElement(block);
+                });
+            })
+            .catch(function (err) {
+                readerContent.innerHTML = '<p style="color:#c0392b;padding:1rem;">加载文件失败: ' + err.message + '</p>';
+            });
+    }
+
+    function closePeerReader() {
+        if (!readerEl) return;
+        readerEl.style.display = 'none';
+    }
+
+    if (readerBack) readerBack.addEventListener('click', closePeerReader);
+    if (readerCopy) {
+        readerCopy.addEventListener('click', function () {
+            if (!currentMdText) return;
+            copyText(currentMdText).then(function () {
+                readerCopy.textContent = '已复制 ✓';
+                clearTimeout(copyTimer);
+                copyTimer = setTimeout(function () { readerCopy.textContent = '复制全文'; }, 1500);
+            }).catch(function () {
+                readerCopy.textContent = '复制失败';
+                clearTimeout(copyTimer);
+                copyTimer = setTimeout(function () { readerCopy.textContent = '复制全文'; }, 1500);
+            });
+        });
+    }
+    if (readerContent) {
+        readerContent.addEventListener('click', function (e) {
+            var a = e.target.closest('a[href]');
+            if (!a) return;
+            var href = a.getAttribute('href');
+            if (/\.md$/i.test(href)) {
+                e.preventDefault();
+                var marker = '/files/';
+                var i = href.indexOf(marker);
+                if (i >= 0) {
+                    var p = href.slice(i + marker.length);
+                    if (p.charAt(0) === '/') p = p.slice(1);
+                    openPeerReader(decodeURIComponent(p));
+                }
+            }
+        });
     }
 
     function showError(msg) {
@@ -216,6 +335,7 @@
                 peer = found;
                 titleEl.textContent = peer.name + ' · ' + peer.host + ':' + peer.port;
                 titleEl.className = 'fb-peer-title';
+                setupReaderRenderer();
                 if (!window.location.hash) {
                     window.location.hash = '/';
                 } else {

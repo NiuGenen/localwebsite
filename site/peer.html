@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>共享目录浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=18">
+    <link rel="stylesheet" href="/css/style.css?v=19">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
 </head>
 <body>
     <header>
@@ -49,7 +50,21 @@
         <p>&copy; 2026 本地文件站</p>
     </footer>
 
+    <div class="reader-overlay" id="peer-reader" style="display:none">
+        <div class="reader-panel">
+            <div class="reader-toolbar" id="reader-toolbar">
+                <button type="button" class="btn btn-sm" id="peer-reader-back"><i class="fas fa-arrow-left"></i> 返回列表</button>
+                <span id="reader-filename"></span>
+                <button type="button" class="btn btn-sm btn-copy" id="peer-reader-copy">复制全文</button>
+            </div>
+            <div class="reader-body" id="reader-content"></div>
+        </div>
+    </div>
+
+    <script src="/js/marked.min.js"></script>
+    <script src="/js/highlight.min.js"></script>
+    <script src="/js/copy.js"></script>
     <script src="/js/layout.js"></script>
-    <script src="/js/peer.js?v=1"></script>
+    <script src="/js/peer.js?v=2"></script>
 </body>
 </html>
