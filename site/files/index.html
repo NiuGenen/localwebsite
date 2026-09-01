@@ -211,6 +211,15 @@
 
         var opTd = document.createElement('td');
         opTd.className = 'fb-col-op';
+        if (entry.type === 'dir') {
+            var dirDl = document.createElement('a');
+            dirDl.href = '/api/zip?path=' + encodeURIComponent(childPath);
+            dirDl.target = '_blank';
+            dirDl.className = 'fb-read-btn';
+            dirDl.title = '下载整个文件夹';
+            dirDl.innerHTML = '<i class="fas fa-download"></i>';
+            opTd.appendChild(dirDl);
+        }
         var opDisabled = currentBlocked || !!entry.blocked;
         if (entry.type === 'file' && /\.md$/i.test(entry.name)) {
             var readLink = document.createElement('a');

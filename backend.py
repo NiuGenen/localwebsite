@@ -6,9 +6,10 @@ import uuid
 import json
 import errno
 import socket
+import zipfile
 import urllib.request
 from urllib.parse import quote
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024 * 1024  # 上传上限 1GB，与 nginx client_max_body_size 对齐
@@ -17,6 +18,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # ===== 本机访问判定（仅回环地址）=====
 LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
+# ===== 文件夹打包下载临时目录（磁盘，不入库）=====
+TMP_DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_downloads")
 
 # ===== 待办事项数据文件 =====
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
@@ -103,6 +107,55 @@ def api_list_files():
         except OSError:
             pass
     return jsonify({"entries": entries, "path": path, "blocked": is_blocked(path)})
+
+# ===== 文件夹打包下载 API =====
+
+@app.route("/api/zip")
+def api_zip_dir():
+    path = (request.args.get("path") or "").strip().strip("/")
+    target = safe_join_soft(UPLOAD_DIR, path) if path else UPLOAD_DIR
+    if not target or not os.path.isdir(target):
+        return jsonify({"error": "无效的目录"}), 400
+
+    name = os.path.basename(os.path.normpath(target)) or "files"
+    os.makedirs(TMP_DOWNLOAD_DIR, exist_ok=True)
+    tmp = os.path.join(TMP_DOWNLOAD_DIR, uuid.uuid4().hex + ".zip")
+
+    def cleanup():
+        try:
+            os.remove(tmp)
+        except OSError:
+            pass
+
+    try:
+        with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as zf:
+            for root, dirs, files in os.walk(target):
+                dirs[:] = [d for d in dirs if not d.startswith(".")]
+                for f in files:
+                    if f.startswith(".") or f == "index.html":
+                        continue
+                    full = os.path.join(root, f)
+                    if os.path.islink(full):
+                        continue
+                    arc = os.path.relpath(full, UPLOAD_DIR)
+                    zf.write(full, arc)
+    except Exception as e:
+        cleanup()
+        return jsonify({"error": "打包失败: {}".format(e)}), 500
+
+    def generate():
+        try:
+            with open(tmp, "rb") as fh:
+                while True:
+                    chunk = fh.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            cleanup()
+
+    headers = {"Content-Disposition": "attachment; filename*=UTF-8''{}.zip".format(quote(name))}
+    return Response(generate(), mimetype="application/zip", headers=headers)
 
 # ===== 文件上传 API =====
 

@@ -2,6 +2,7 @@ site/files/*
 !site/files/index.html
 __pycache__/
 nginx_client_body/
+tmp_downloads/
 site/todo.json
 site/custom/
 site/custom_pages.json
