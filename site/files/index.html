@@ -214,10 +214,23 @@
         if (entry.type === 'dir') {
             var dirDl = document.createElement('a');
             dirDl.href = '/api/zip?path=' + encodeURIComponent(childPath);
-            dirDl.target = '_blank';
             dirDl.className = 'fb-read-btn';
             dirDl.title = '下载整个文件夹';
             dirDl.innerHTML = '<i class="fas fa-download"></i>';
+            dirDl.addEventListener('click', function (e) {
+                e.preventDefault();
+                fetch('/api/zip?path=' + encodeURIComponent(childPath) + '&check=1')
+                    .then(function (r) { return r.json(); })
+                    .then(function (d) {
+                        if (d.error) { alert(d.error); return; }
+                        var a = document.createElement('a');
+                        a.href = dirDl.href;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                    })
+                    .catch(function () { alert('无法检查文件夹大小'); });
+            });
             opTd.appendChild(dirDl);
         }
         var opDisabled = currentBlocked || !!entry.blocked;

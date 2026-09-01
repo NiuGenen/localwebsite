@@ -21,6 +21,7 @@ LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 
 # ===== 文件夹打包下载临时目录（磁盘，不入库）=====
 TMP_DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_downloads")
+MAX_ZIP_SIZE = 1 * 1024 * 1024 * 1024  # 文件夹打包下载的大小上限（1GB）
 
 # ===== 待办事项数据文件 =====
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
@@ -110,12 +111,35 @@ def api_list_files():
 
 # ===== 文件夹打包下载 API =====
 
+def dir_size(target):
+    """计算目录数据总量（与打包规则一致：排除点文件、index.html、符号链接）。"""
+    total = 0
+    for root, dirs, files in os.walk(target):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            if f.startswith(".") or f == "index.html":
+                continue
+            full = os.path.join(root, f)
+            if os.path.islink(full):
+                continue
+            try:
+                total += os.path.getsize(full)
+            except OSError:
+                pass
+    return total
+
 @app.route("/api/zip")
 def api_zip_dir():
     path = (request.args.get("path") or "").strip().strip("/")
     target = safe_join_soft(UPLOAD_DIR, path) if path else UPLOAD_DIR
     if not target or not os.path.isdir(target):
         return jsonify({"error": "无效的目录"}), 400
+
+    total = dir_size(target)
+    if total > MAX_ZIP_SIZE:
+        return jsonify({"error": "文件夹数据量过大（{:.2f} GB），超过 1GB 限制，禁止打包下载".format(total / (1024 ** 3))}), 413
+    if request.args.get("check"):
+        return jsonify({"ok": True, "size": total})
 
     name = os.path.basename(os.path.normpath(target)) or "files"
     os.makedirs(TMP_DOWNLOAD_DIR, exist_ok=True)
