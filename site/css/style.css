@@ -1872,6 +1872,13 @@ footer {
     overflow-y: auto;
     padding: 1.5rem 2rem;
 }
+.reader-panel #reader-toolbar {
+    padding: 0.8rem 1.25rem;
+    margin-bottom: 0;
+    flex-shrink: 0;
+    background: #f8f9fa;
+    border-radius: 8px 8px 0 0;
+}
 @media (max-width: 600px) {
     .peers-grid {
         grid-template-columns: 1fr;
