@@ -90,6 +90,25 @@
         return 'http://' + peer.host + ':' + peer.port + '/files/' + encodeURI(path);
     }
 
+    function zipUrl(path) {
+        return 'http://' + peer.host + ':' + peer.port + '/api/zip?path=' + encodeURIComponent(path);
+    }
+
+    function downloadDir(path) {
+        var base = zipUrl(path);
+        fetch(base + '&check=1')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.error) { alert(d.error); return; }
+                var a = document.createElement('a');
+                a.href = base;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            })
+            .catch(function () { alert('无法检查文件夹大小'); });
+    }
+
     function buildRow(entry, path) {
         var tr = document.createElement('tr');
         tr.className = entry.type === 'dir' ? 'fb-row-dir' : 'fb-row-file';
@@ -132,6 +151,18 @@
 
         var opTd = document.createElement('td');
         opTd.className = 'fb-col-op';
+        if (entry.type === 'dir') {
+            var dirDl = document.createElement('a');
+            dirDl.href = '#';
+            dirDl.className = 'fb-read-btn';
+            dirDl.title = '下载整个文件夹';
+            dirDl.innerHTML = '<i class="fas fa-download"></i>';
+            dirDl.addEventListener('click', function (e) {
+                e.preventDefault();
+                downloadDir(childPath);
+            });
+            opTd.appendChild(dirDl);
+        }
         if (entry.type === 'file') {
             if (/\.md$/i.test(entry.name)) {
                 var read = document.createElement('button');

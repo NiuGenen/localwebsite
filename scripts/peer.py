@@ -35,17 +35,22 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.request
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote, unquote, urlparse
 
-VERSION = "1.4"
+VERSION = "1.5"
 
 # 默认中心站与注册密钥（可按需修改，也可通过命令行参数覆盖）
 DEFAULT_CENTRAL = "http://192.168.8.65:8080"
 DEFAULT_SECRET = "e9f41c66bf7fbb56ee05cd6775944749"
+
+# 文件夹打包下载大小上限（1GB）
+MAX_ZIP_SIZE = 1 * 1024 * 1024 * 1024
 
 
 def find_free_port(start=9000, attempts=100):
@@ -157,6 +162,24 @@ def safe_join(base, child):
     return full
 
 
+def dir_size(target):
+    """统计目录数据总量（与打包/列表规则一致：排除点文件、index.html、符号链接）。"""
+    total = 0
+    for root, dirs, files in os.walk(target):
+        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        for f in files:
+            if f.startswith(".") or f == "index.html":
+                continue
+            full = os.path.join(root, f)
+            if os.path.islink(full):
+                continue
+            try:
+                total += os.path.getsize(full)
+            except OSError:
+                pass
+    return total
+
+
 def list_dir(base, rel):
     """列出目录，返回与中心站 /api/files 同构的结构。"""
     target = safe_join(base, rel) if rel else base
@@ -247,6 +270,17 @@ class PeerHandler(BaseHTTPRequestHandler):
                 return self.send_error_text(400, "无效的目录路径")
             return self.send_json(result)
 
+        if path.startswith("/api/zip"):
+            rel = ""
+            check_only = False
+            if query:
+                for pair in query.split("&"):
+                    if pair.startswith("path="):
+                        rel = unquote(pair[5:]).strip().strip("/")
+                    elif pair.startswith("check=1"):
+                        check_only = True
+            return self._serve_zip(rel, check_only)
+
         if path.startswith("/files/"):
             rel = path[len("/files/"):]
             return self._serve_file(unquote(rel), head_only)
@@ -332,6 +366,67 @@ class PeerHandler(BaseHTTPRequestHandler):
             pass
         except OSError:
             pass
+
+    def _serve_zip(self, rel, check_only=False):
+        target = safe_join(self.root, rel)
+        if not target or not os.path.isdir(target):
+            return self.send_error_text(400, "无效的目录")
+        total = dir_size(target)
+        if total > MAX_ZIP_SIZE:
+            return self.send_error_text(
+                413, "文件夹数据量过大（{:.2f} GB），超过 1GB 限制，禁止打包下载".format(total / (1024 ** 3)))
+        if check_only:
+            return self.send_json({"ok": True, "size": total})
+
+        name = os.path.basename(os.path.normpath(target)) or "files"
+        try:
+            fd, tmp = tempfile.mkstemp(dir=os.path.dirname(target) or None, suffix=".zip")
+        except OSError:
+            fd, tmp = tempfile.mkstemp(suffix=".zip")
+        os.close(fd)
+
+        def cleanup():
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+        try:
+            with zipfile.ZipFile(tmp, "w", zipfile.ZIP_STORED) as zf:
+                for root, dirs, files in os.walk(target):
+                    dirs[:] = [d for d in dirs if not d.startswith(".")]
+                    for f in files:
+                        if f.startswith(".") or f == "index.html":
+                            continue
+                        full = os.path.join(root, f)
+                        if os.path.islink(full):
+                            continue
+                        arc = os.path.relpath(full, self.root)
+                        zf.write(full, arc)
+        except Exception as e:
+            cleanup()
+            return self.send_error_text(500, "打包失败: %s" % e)
+
+        try:
+            st = os.stat(tmp)
+            self.send_response(200)
+            self.send_cors()
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Length", str(st.st_size))
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''%s.zip" % quote(name))
+            self.end_headers()
+            with open(tmp, "rb") as fh:
+                while True:
+                    chunk = fh.read(65536)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        except OSError:
+            pass
+        finally:
+            cleanup()
 
 
 def unregister(central, secret, host, port):
