@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>共享目录浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=20">
+    <link rel="stylesheet" href="/css/style.css?v=21">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
     <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
 </head>
@@ -61,10 +61,21 @@
         </div>
     </div>
 
+    <div class="reader-overlay" id="peer-doc-reader" style="display:none">
+        <div class="reader-panel reader-panel-doc">
+            <div class="doc-reader-toolbar" id="doc-reader-toolbar">
+                <button type="button" class="btn btn-sm" id="peer-doc-back"><i class="fas fa-arrow-left"></i> 返回列表</button>
+                <span id="peer-doc-filename"></span>
+                <button type="button" class="btn btn-sm btn-copy" id="peer-doc-download" title="下载原文件"><i class="fas fa-download"></i></button>
+            </div>
+            <div class="reader-body reader-body-frame"><iframe id="peer-doc-frame" class="doc-reader-frame"></iframe></div>
+        </div>
+    </div>
+
     <script src="/js/marked.min.js"></script>
     <script src="/js/highlight.min.js"></script>
     <script src="/js/copy.js"></script>
     <script src="/js/layout.js"></script>
-    <script src="/js/peer.js?v=3"></script>
+    <script src="/js/peer.js?v=4"></script>
 </body>
 </html>

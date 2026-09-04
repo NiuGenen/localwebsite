@@ -12,6 +12,11 @@
     var readerFilename = document.getElementById('reader-filename');
     var readerCopy = document.getElementById('peer-reader-copy');
     var readerBack = document.getElementById('peer-reader-back');
+    var docReaderEl = document.getElementById('peer-doc-reader');
+    var docFrame = document.getElementById('peer-doc-frame');
+    var docFilename = document.getElementById('peer-doc-filename');
+    var docBack = document.getElementById('peer-doc-back');
+    var docDownload = document.getElementById('peer-doc-download');
 
     var peerId = new URLSearchParams(window.location.search).get('id') || '';
     var peer = null;
@@ -78,6 +83,7 @@
             png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image',
             gif: 'fa-file-image', svg: 'fa-file-image',
             md: 'fa-file-lines', txt: 'fa-file-lines',
+            doc: 'fa-file-word', docx: 'fa-file-word',
             json: 'fa-file-code', bin: 'fa-file-binary',
             iso: 'fa-file', html: 'fa-file-code', htm: 'fa-file-code',
             py: 'fa-file-code', js: 'fa-file-code', css: 'fa-file-code'
@@ -174,6 +180,17 @@
                     openPeerReader(path ? path + '/' + entry.name : entry.name);
                 });
                 opTd.appendChild(read);
+            }
+            if (/\.docx?$/i.test(entry.name)) {
+                var docRead = document.createElement('button');
+                docRead.type = 'button';
+                docRead.className = 'fb-read-btn';
+                docRead.title = '在网页阅读';
+                docRead.innerHTML = '<i class="fas fa-file-word"></i>';
+                docRead.addEventListener('click', function () {
+                    openPeerDocReader(path ? path + '/' + entry.name : entry.name);
+                });
+                opTd.appendChild(docRead);
             }
             var dl = document.createElement('a');
             dl.href = downloadUrl(filePath);
@@ -288,6 +305,62 @@
             }
         });
     }
+
+    // ===== doc/docx 网页阅读 =====
+
+    function getFileName(path) {
+        var parts = path.replace(/\\/g, '/').split('/');
+        return parts[parts.length - 1] || path;
+    }
+
+    function openPeerDocReader(filePath) {
+        if (!docReaderEl) return;
+        docFilename.textContent = getFileName(filePath);
+        docFrame.src = 'about:blank';
+        docFrame.style.display = 'none';
+        docReaderEl.style.display = 'flex';
+        if (docDownload) {
+            docDownload.href = downloadUrl(filePath);
+        }
+
+        var url = '/api/peers/' + encodeURIComponent(peerId) + '/doc?path=' + encodeURIComponent(filePath);
+        fetch(url)
+            .then(function (r) {
+                if (!r.ok) {
+                    return r.json().then(function (d) {
+                        throw new Error(d.error || ('HTTP ' + r.status));
+                    });
+                }
+                return r.text();
+            })
+            .then(function (html) {
+                docFrame.style.display = '';
+                var blobUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+                docFrame.src = blobUrl;
+                docFrame.addEventListener('load', function () { URL.revokeObjectURL(blobUrl); });
+            })
+            .catch(function (err) {
+                var panel = docReaderEl.querySelector('.reader-panel');
+                var old = panel.querySelector('#peer-doc-err');
+                if (old) old.remove();
+                var msg = document.createElement('div');
+                msg.id = 'peer-doc-err';
+                msg.style.cssText = 'padding:1.5rem;color:#c0392b;';
+                msg.textContent = '文档读取失败: ' + err.message;
+                panel.appendChild(msg);
+                docFrame.style.display = 'none';
+            });
+    }
+
+    function closePeerDocReader() {
+        if (!docReaderEl) return;
+        var old = docReaderEl.querySelector('#peer-doc-err');
+        if (old) old.remove();
+        docReaderEl.style.display = 'none';
+        docFrame.src = 'about:blank';
+    }
+
+    if (docBack) docBack.addEventListener('click', closePeerDocReader);
 
     function showError(msg) {
         loading.style.display = 'none';

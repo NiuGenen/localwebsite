@@ -7,6 +7,8 @@ import json
 import errno
 import socket
 import zipfile
+import hashlib
+import subprocess
 import urllib.request
 from urllib.parse import quote
 from flask import Flask, request, jsonify, Response
@@ -22,6 +24,11 @@ LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
 # ===== 文件夹打包下载临时目录（磁盘，不入库）=====
 TMP_DOWNLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_downloads")
 MAX_ZIP_SIZE = 1 * 1024 * 1024 * 1024  # 文件夹打包下载的大小上限（1GB）
+
+# ===== 文档（doc/docx）在线阅读转换 =====
+TMP_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_docs")
+DOC_READ_EXTS = {".doc", ".docx"}
+MAX_DOC_BYTES = 50 * 1024 * 1024  # 单个文档转换/提取上限（50MB）
 
 # ===== 待办事项数据文件 =====
 TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
@@ -812,6 +819,253 @@ def api_peers_file(peer_id):
         return jsonify({"error": peer_conn_error(peer, e)}), 502
     except socket.timeout:
         return jsonify({"error": "读取节点文件超时"}), 502
+
+# ===== 文档（doc/docx）在线阅读 =====
+
+def docx_to_html(data):
+    """将 .docx 字节提取为完整 HTML（正文/标题/表格/内嵌图片，均 stdlib）。"""
+    import io
+    import base64
+    import html as _html
+    from xml.etree import ElementTree as ET
+    import posixpath
+
+    W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+    MIME = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".gif": "image/gif", ".bmp": "image/bmp", ".svg": "image/svg+xml",
+            ".tif": "image/tiff", ".tiff": "image/tiff"}
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(data))
+        root = ET.fromstring(zf.read("word/document.xml"))
+    except Exception:
+        raise ValueError("不是有效的 .docx 文件（无法解析）")
+
+    # 关系 -> 内嵌媒体
+    media = {}
+    try:
+        rels = ET.fromstring(zf.read("word/_rels/document.xml.rels"))
+        for rel in rels:
+            rid = rel.get("Id")
+            tgt = rel.get("Target") or ""
+            if not rid or not tgt:
+                continue
+            candidates = []
+            if tgt.startswith("/"):
+                candidates.append(tgt.lstrip("/"))
+            else:
+                candidates.append(posixpath.normpath(posixpath.join("word", tgt)).lstrip("/"))
+                candidates.append(posixpath.normpath(posixpath.join("word/_rels", tgt)).lstrip("/"))
+            for name in candidates:
+                if "/media/" not in "/" + name:
+                    continue
+                try:
+                    mbytes = zf.read(name)
+                except KeyError:
+                    continue
+                media[rid] = {"ext": os.path.splitext(name)[1].lower(), "data": mbytes}
+                break
+    except Exception:
+        pass
+
+    def media_img(rid):
+        m = media.get(rid)
+        if not m:
+            return None
+        mime = MIME.get(m["ext"])
+        if not mime:
+            return None
+        b64 = base64.b64encode(m["data"]).decode("ascii")
+        return '<img src="data:%s;base64,%s" class="doci" alt="">' % (mime, b64)
+
+    def walk_inline(node):
+        out = []
+
+        def rec(n):
+            for c in n:
+                tag = c.tag
+                if tag == W + "t":
+                    out.append(_html.escape(c.text or "", quote=False))
+                elif tag == W + "tab":
+                    out.append("&#9;")
+                elif tag == W + "br":
+                    out.append("<br>")
+                elif str(tag).endswith("}imagedata") or str(tag).endswith("}blip"):
+                    for v in c.attrib.values():
+                        if v in media:
+                            img = media_img(v)
+                            if img:
+                                out.append(img)
+                            break
+                else:
+                    rec(c)
+
+        rec(node)
+        return "".join(out)
+
+    def para_html(p):
+        ppr = p.find(W + "pPr")
+        tag = "p"
+        dlist = False
+        if ppr is not None:
+            pst = ppr.find(W + "pStyle")
+            if pst is not None:
+                v = (pst.get(W + "val") or "").strip()
+                m = re.match(r"(?i)heading\s*([1-6])$", v)
+                if m:
+                    tag = "h" + m.group(1)
+                elif v in ("1", "2", "3", "4", "5", "6"):
+                    tag = "h" + v
+            if ppr.find(W + "numPr") is not None:
+                dlist = True
+        inner = walk_inline(p)
+        if not inner.strip():
+            return "<p>&nbsp;</p>"
+        if tag != "p":
+            return "<%s>%s</%s>" % (tag, inner, tag)
+        if dlist:
+            return '<p class="dlist">• %s</p>' % inner
+        return "<p>%s</p>" % inner
+
+    def tbl_html(tbl):
+        rows = ""
+        for tr in tbl.findall(W + "tr"):
+            cells = ""
+            for tc in tr.findall(W + "tc"):
+                cell = ""
+                for p in tc.findall(W + "p"):
+                    cell += para_html(p)
+                cells += "<td>%s</td>" % cell
+            rows += "<tr>%s</tr>" % cells
+        return '<table class="doct"><tbody>%s</tbody></table>' % rows
+
+    body = root.find(W + "body")
+    blocks = []
+    for el in body:
+        if el.tag == W + "p":
+            blocks.append(para_html(el))
+        elif el.tag == W + "tbl":
+            blocks.append(tbl_html(el))
+    content = "".join(blocks) or "<p>（文档内容为空）</p>"
+
+    style = (
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',"
+        "Arial,sans-serif;color:#222;line-height:1.75;margin:0;}"
+        ".docbody{max-width:880px;margin:0 auto;padding:1.5em 2em;word-break:break-word;}"
+        "h1,h2,h3,h4,h5,h6{color:#2c3e50;line-height:1.35;}"
+        "h1{font-size:1.7em;border-bottom:2px solid #eee;padding-bottom:.25em;}"
+        "h2{font-size:1.4em;border-bottom:1px solid #eee;padding-bottom:.2em;}"
+        "img.doci{max-width:100%;height:auto;}"
+        "table.doct{border-collapse:collapse;margin:1em 0;max-width:100%;}"
+        "table.doct td,table.doct th{border:1px solid #ccc;padding:4px 9px;font-size:.95em;}"
+        "p.dlist{margin:.2em 0;}"
+    )
+    return ("<!DOCTYPE html><html><head><meta charset=\"utf-8\"><style>%s</style></head>"
+            "<body><div class=\"docbody\">%s</div></body></html>" % (style, content))
+
+
+def doc_bytes_to_html(data, ext):
+    """把文档字节转成完整 HTML。.docx 走 stdlib；.doc 走 LibreOffice；按字节哈希缓存。"""
+    h = hashlib.sha1(data).hexdigest()
+    os.makedirs(TMP_DOCS_DIR, exist_ok=True)
+    cache = os.path.join(TMP_DOCS_DIR, h + ".html")
+    if os.path.exists(cache):
+        try:
+            with open(cache, "r", encoding="utf-8", errors="replace") as f:
+                return f.read()
+        except OSError:
+            pass
+
+    if ext == ".docx":
+        html = docx_to_html(data)
+    else:
+        import tempfile
+        import glob
+        with tempfile.TemporaryDirectory(prefix="lodoc_") as td:
+            src = os.path.join(td, "input.doc")
+            with open(src, "wb") as f:
+                f.write(data)
+            outdir = os.path.join(td, "out")
+            os.makedirs(outdir, exist_ok=True)
+            try:
+                r = subprocess.run(
+                    ["soffice", "--headless", "--norestore",
+                     "-env:UserInstallation=file://" + os.path.join(td, "profile"),
+                     "--convert-to", "html", "--outdir", outdir, src],
+                    capture_output=True, timeout=180)
+            except (OSError, subprocess.TimeoutExpired) as e:
+                raise ValueError("LibreOffice 调用失败: %s（是否已安装？）" % e)
+            found = glob.glob(os.path.join(outdir, "*.html"))
+            if not found:
+                detail = (r.stderr or b"").decode("utf-8", "replace").strip()
+                raise ValueError("文档转换失败%s" % (": " + detail[:200] if detail else ""))
+            with open(found[0], "r", encoding="utf-8", errors="replace") as f:
+                html = f.read()
+    try:
+        with open(cache, "w", encoding="utf-8") as f:
+            f.write(html)
+    except OSError:
+        pass
+    return html
+
+
+def read_doc_bytes(full_or_url):
+    """统一读取本地文件或 URL 的字节，带容量上限。返回 bytes。"""
+    if isinstance(full_or_url, str) and (full_or_url.startswith("http://") or full_or_url.startswith("https://")):
+        try:
+            with urllib.request.urlopen(full_or_url, timeout=30) as resp:
+                data = resp.read(MAX_DOC_BYTES + 1)
+        except urllib.error.URLError as e:
+            raise ValueError(peer_conn_error({"host": "", "port": ""}, e))
+        except socket.timeout:
+            raise ValueError("读取文件超时")
+    else:
+        try:
+            with open(full_or_url, "rb") as f:
+                data = f.read(MAX_DOC_BYTES + 1)
+        except OSError as e:
+            raise ValueError("读取文件失败: %s" % e)
+    if len(data) > MAX_DOC_BYTES:
+        raise ValueError("文件过大（>50MB），暂不支持在线阅读")
+    return data
+
+
+@app.route("/api/doc")
+def api_doc_read():
+    path = (request.args.get("path") or "").strip().strip("/")
+    full = safe_join_soft(UPLOAD_DIR, path)
+    if not full or not os.path.isfile(full):
+        return jsonify({"error": "文件不存在"}), 404
+    ext = os.path.splitext(full)[1].lower()
+    if ext not in DOC_READ_EXTS:
+        return jsonify({"error": "仅支持阅读 .doc / .docx 文件"}), 400
+    try:
+        data = read_doc_bytes(full)
+        html = doc_bytes_to_html(data, ext)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    return app.response_class(html, mimetype="text/html")
+
+
+@app.route("/api/peers/<peer_id>/doc", methods=["GET"])
+def api_peers_doc(peer_id):
+    peer = find_peer(peer_id)
+    if not peer:
+        return jsonify({"error": "节点不存在"}), 404
+    if not peer_online(peer):
+        return jsonify({"error": "节点离线"}), 503
+    path = (request.args.get("path") or "").strip().strip("/")
+    ext = os.path.splitext(path)[1].lower()
+    if not path or ext not in DOC_READ_EXTS:
+        return jsonify({"error": "仅支持阅读 .doc / .docx 文件"}), 400
+    url = "http://{}:{}/files/{}".format(peer["host"], peer["port"], quote(path, safe="/"))
+    try:
+        data = read_doc_bytes(url)
+        html = doc_bytes_to_html(data, ext)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except urllib.error.URLError as e:
+        return jsonify({"error": peer_conn_error(peer, e)}), 502
+    return app.response_class(html, mimetype="text/html")
 
 # ===== 自定义页面 API =====
 

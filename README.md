@@ -7,6 +7,7 @@
 - **文件浏览**：自定义文件浏览器（替代 Nginx autoindex），解决中文文件名对齐问题，支持完整长文件名显示与响应式布局。
 - **文件操作**：多文件上传（带实时进度条，上传上限由 nginx `client_max_body_size` 控制，默认 1GB）、新建文件夹、剪切/粘贴移动文件、重命名（文件与文件夹均可）、**文件夹一键打包下载**（`/api/zip`，不压缩、流式下发，排除点文件与 `index.html`）。
 - **文件阅读入口**：`md` 文件在文件浏览中带有「阅读」按钮，点击可直接在站内 Markdown 阅读页打开。
+- **Word 在线阅读**：`.doc` / `.docx` 文件在文件浏览（本机与局域网共享）中带有「阅读」按钮，服务端转换为 HTML 后在页内阅读：`.docx` 用 Python 标准库提取（正文/标题/表格/内嵌图片）；`.doc` 用 **LibreOffice**（`soffice`)转换保真排版；结果按内容哈希缓存（`tmp_docs/`，不入库）。
 - **黑名单目录保护**：`binary-translation` 目录禁止上传、移动、重命名等修改操作（仍可浏览下载）。
 - **Markdown 阅读**：文件列表选择 + Markdown 渲染 + 代码高亮，显示完整文件名；支持**图片渲染**与**相对链接**（图片/链接按当前文档所在目录解析，`[链接](其他.md)` 可在阅读器内直接跳转）；阅读工具栏提供**复制全文**（一键复制原始 Markdown 源码）。
 - **自定义页面**：创建独立的 Markdown 阅读页（标题 + markdown 简介 + 文档清单），组织若干相关文档集中阅读。
@@ -19,6 +20,7 @@
 - **多机局域网共享**：局域网内任意机器可运行 `scripts/peer.py`（仅 Python 标准库）以只读方式共享一个目录，并每 30s 向中心站心跳注册；中心站「局域网共享」门户（`peers.html`）汇总在线机器与其共享目录，供访客统一浏览下载。
   - 目录列表由中心站**服务端转发**（`/api/peers/<id>/tree`，无 CORS 问题）；文件**下载直连各机器**（`http://<机器IP>:<端口>/files/...`，不占中心站带宽，支持 Range 断点续传/视频拖进度条）。
   - 远程 `.md` 文件可在网页内**直接阅读**（`/api/peers/<id>/file` 经中心站读取，支持代码高亮与相对图片/链接解析到该节点）。
+  - 远程 `.doc` / `.docx` 文件同样可**在线阅读**（`/api/peers/<id>/doc` 经中心站转换）。
   - 远程目录支持**一键打包下载**（节点 `/api/zip`，不压缩、流式，排除点文件与 `index.html`，超过 1GB 禁止并提示）。
   - 门户页提供 `peer.py` 下载与运行说明；各机器本地照常管理目录内容，网页端只读。
   - 注册密钥 `PEER_SECRET` 校验，防止局域网内他人伪造共享源；密钥对门户访客可见（便于自服务部署）。
@@ -59,6 +61,7 @@
     ├── files/
     │   └── index.html  # 文件浏览器（SPA，含 md 阅读入口）
     ├── reader.html     # Markdown 阅读器（支持图片与相对链接）
+    ├── docreader.html  # Word（.doc/.docx）在线阅读器（服务端转 HTML）
     ├── peers.html      # 局域网共享门户（peer.py 下载与运行说明 + 在线机器列表）
     ├── peer.html       # 远程机器只读文件浏览器（列表 + 下载 + md 网页阅读）
     ├── pages.html      # 自定义页面列表（创建、贴首页）
@@ -81,7 +84,7 @@
 
 ## 快速开始
 
-依赖：Nginx、Python3 + venv（Flask）。
+依赖：Nginx、Python3 + venv（Flask）。Word（.doc）在线阅读需额外安装 **LibreOffice**（`sudo apt-get install -y libreoffice`）。
 
 ```bash
 ./scripts/start.sh     # 启动 Flask 后端 + Nginx
@@ -163,6 +166,7 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/files?path=` | 列出目录内容（含每项 `blocked` 标志） |
+| GET | `/api/doc?path=` | 将本机 `.doc`/`.docx` 转 HTML（docx 用 stdlib、doc 用 LibreOffice，按内容缓存） |
 | GET | `/api/zip?path=` | 打包下载目录为 zip（不压缩、流式，排除点文件与 index.html） |
 | POST | `/api/upload` | 上传文件（支持多文件） |
 | POST | `/api/mkdir` | 新建文件夹（同名拒绝） |
@@ -186,6 +190,7 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 | GET | `/api/peers` | 在线共享节点列表（开放；离线节点自动清除，不保留记录） |
 | GET | `/api/peers/<id>/tree?path=` | 服务端转发节点目录列表（开放；节点离线返回 503） |
 | GET | `/api/peers/<id>/file?path=` | 读取节点 `.md` 文件内容用于网页阅读（开放，仅限 `.md`，>5MB 拒绝） |
+| GET | `/api/peers/<id>/doc?path=` | 读取节点 `.doc`/`.docx` 并转 HTML（开放，经中心站转换，>50MB 拒绝） |
 | DELETE | `/api/peers/<id>` | 移除节点（仅本机） |
 
 ### 节点 HTTP 接口（peer.py）

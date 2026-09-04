@@ -163,6 +163,7 @@
             png: 'fa-file-image', jpg: 'fa-file-image', jpeg: 'fa-file-image',
             gif: 'fa-file-image', svg: 'fa-file-image',
             md: 'fa-file-lines', txt: 'fa-file-lines',
+            doc: 'fa-file-word', docx: 'fa-file-word',
             json: 'fa-file-code', bin: 'fa-file-binary',
             iso: 'fa-file', html: 'fa-file-code', htm: 'fa-file-code',
             py: 'fa-file-code', js: 'fa-file-code', css: 'fa-file-code'
@@ -242,6 +243,14 @@
             readLink.title = '在网站阅读';
             readLink.innerHTML = '<i class="fas fa-book-open"></i>';
             opTd.appendChild(readLink);
+        }
+        if (entry.type === 'file' && /\.docx?$/i.test(entry.name)) {
+            var docLink = document.createElement('a');
+            docLink.href = '/docreader.html?path=' + encodeURIComponent((path ? path + '/' : '') + entry.name);
+            docLink.className = 'fb-read-btn';
+            docLink.title = '在网站阅读';
+            docLink.innerHTML = '<i class="fas fa-file-word"></i>';
+            opTd.appendChild(docLink);
         }
         var renameBtn = document.createElement('button');
         renameBtn.type = 'button';

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文档阅读 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=21">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/reader.html">Markdown阅读</a>
+            <a href="/peers.html">局域网共享</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="fb-panel doc-reader-panel">
+            <div class="fb-toolbar">
+                <div class="fb-toolbar-left">
+                    <button type="button" class="btn btn-sm" id="docreader-back"><i class="fas fa-arrow-left"></i> 返回文件</button>
+                    <span class="fb-path doc-reader-title" id="docreader-title"></span>
+                </div>
+                <div class="fb-actions">
+                    <a class="btn btn-sm" id="docreader-download" href="#"><i class="fas fa-download"></i> 下载原文件</a>
+                </div>
+            </div>
+            <div id="docreader-error" class="fb-error" style="display:none"></div>
+            <div id="docreader-loading" class="fb-loading">文档转换中，请稍候...</div>
+            <iframe id="docreader-frame" class="doc-reader-frame" style="display:none"></iframe>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/docreader.js?v=1"></script>
+</body>
+</html>
