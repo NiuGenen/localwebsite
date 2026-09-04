@@ -105,7 +105,8 @@
     var renameTarget = null;
 
     function getPath() {
-        return window.location.hash.replace(/^#\/*/, '');
+        var h = window.location.hash.replace(/^#\/*/, '');
+        try { return decodeURIComponent(h); } catch (e) { return h; }
     }
 
     function humanSize(bytes) {

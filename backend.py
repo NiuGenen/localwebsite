@@ -83,11 +83,13 @@ def api_list_files():
         target_dir = safe_join_soft(UPLOAD_DIR, path)
         if not target_dir:
             return jsonify({"error": "invalid path"}), 400
+    if not os.path.isdir(target_dir):
+        return jsonify({"error": "目录不存在"}), 400
 
     try:
         names = sorted(os.listdir(target_dir))
-    except Exception:
-        return jsonify({"error": "cannot list directory"}), 500
+    except OSError:
+        return jsonify({"error": "无法读取目录"}), 500
 
     entries = []
     for name in names:
