@@ -26,7 +26,8 @@
     var copyTimer = null;
 
     function getPath() {
-        return window.location.hash.replace(/^#\/*/, '');
+        var h = window.location.hash.replace(/^#\/*/, '');
+        try { return decodeURIComponent(h); } catch (e) { return h; }
     }
 
     function humanSize(bytes) {
@@ -93,7 +94,8 @@
     }
 
     function downloadUrl(path) {
-        return 'http://' + peer.host + ':' + peer.port + '/files/' + encodeURI(path);
+        return 'http://' + peer.host + ':' + peer.port + '/files/'
+            + path.split('/').map(function (s) { return encodeURIComponent(s); }).join('/');
     }
 
     function zipUrl(path) {

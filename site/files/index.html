@@ -109,6 +109,10 @@
         try { return decodeURIComponent(h); } catch (e) { return h; }
     }
 
+    function encPath(p) {
+        return p.split('/').map(function (s) { return encodeURIComponent(s); }).join('/');
+    }
+
     function humanSize(bytes) {
         if (bytes === 0) return '-';
         var units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -191,9 +195,9 @@
             link.textContent = entry.name;
             nameTd.appendChild(link);
         } else {
-            var filePath = '/files/' + (path ? path + '/' + entry.name : entry.name);
+            var filePath = path ? path + '/' + entry.name : entry.name;
             var link = document.createElement('a');
-            link.href = filePath;
+            link.href = '/files/' + encPath(filePath);
             link.className = 'fb-link fb-link-file';
             link.target = '_blank';
             link.textContent = entry.name;
