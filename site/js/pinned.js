@@ -40,6 +40,7 @@
                 card.appendChild(para);
                 card.appendChild(btn);
                 container.appendChild(card);
+                if (window.attachFullText) attachFullText(para, p.title);
             });
         })
         .catch(function () {});

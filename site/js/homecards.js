@@ -74,6 +74,7 @@
             }
 
             container.appendChild(card);
+            if (window.attachFullText) attachFullText(para, l.title);
         });
 
         var hasCards = links.length > 0;

@@ -1516,6 +1516,37 @@ footer {
     margin-top: 0.6rem;
 }
 
+/* ===== 卡片简介“详情”按钮与全文弹窗 ===== */
+.ft-more-row {
+    margin-top: 0.25rem;
+    margin-bottom: 0.6rem;
+}
+.ft-more {
+    display: inline-block;
+    background: none;
+    border: none;
+    padding: 0;
+    color: #3498db;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+.ft-more:hover {
+    color: #2980b9;
+    text-decoration: underline;
+}
+.fb-modal-fulltext {
+    max-width: 520px;
+}
+.fulltext-body {
+    font-size: 0.95rem;
+    color: #333;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+
 .btn-danger {
     background: #e74c3c;
 }
