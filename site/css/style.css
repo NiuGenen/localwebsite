@@ -1874,6 +1874,66 @@ footer {
     max-width: 40vw;
 }
 
+/* ===== 简易 Markdown 阅读器（客户端） ===== */
+.md-dropzone {
+    background: #fff;
+    border: 2px dashed #bdc3c7;
+    border-radius: 12px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+}
+.md-dropzone:hover,
+.md-dropzone.md-drop-active {
+    border-color: #3498db;
+    background: #f2f8fd;
+}
+.md-drop-icon {
+    font-size: 2.4rem;
+    margin-bottom: .5rem;
+}
+.md-drop-title {
+    font-size: 1.05rem;
+    color: #2c3e50;
+    font-weight: 600;
+}
+.md-drop-hint {
+    font-size: .85rem;
+    color: #999;
+}
+.md-error {
+    margin-top: 1rem;
+    padding: .6rem .8rem;
+    border-radius: 4px;
+    background: #fdedec;
+    color: #c0392b;
+    font-size: .9rem;
+}
+.md-reading {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,.1);
+    overflow: hidden;
+}
+.md-filename {
+    font-weight: 600;
+    color: #2c3e50;
+    word-break: break-all;
+}
+.md-content {
+    padding: 1.5rem 2rem;
+    overflow-x: auto;
+}
+.md-content #reader-content img {
+    max-width: 100%;
+}
+
+/* ===== 首页简易阅读卡片 ===== */
+.card-mdreader {
+    border-top-color: #34495e;
+}
+
 /* ===== 局域网共享 md 网页阅读 ===== */
 .reader-overlay {
     position: fixed;
