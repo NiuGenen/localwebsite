@@ -12,7 +12,6 @@
         <nav>
             <a href="/" class="active">首页</a>
             <a href="/files/">文件浏览</a>
-            <a href="/reader.html">Markdown阅读</a>
             <a href="/peers.html">局域网共享</a>
             <a href="/info.html">关于</a>
         </nav>
@@ -110,6 +109,16 @@
     <script src="/js/pinned.js?v=5"></script>
     <script src="/js/homecards.js?v=2"></script>
     <script>
+    (function () {
+        var card = document.querySelector('.card-reader');
+        if (!card) return;
+        fetch('/api/local')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.local) card.style.display = 'none';
+            })
+            .catch(function () { card.style.display = 'none'; });
+    })();
     (function () {
         var card = document.querySelector('.card-todo');
         if (!card) return;
