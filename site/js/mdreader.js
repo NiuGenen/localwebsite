@@ -11,6 +11,7 @@
 
     var currentText = '';
     var currentName = '';
+    var diagramPromise = null;
 
     function show(el) { if (el) el.style.display = ''; }
     function hide(el) { if (el) el.style.display = 'none'; }
@@ -90,6 +91,11 @@
             hide(dropEl);
             show(viewEl);
             show(btnExport);
+            if (window.renderMermaidIn) {
+                diagramPromise = renderMermaidIn(contentEl);
+            } else {
+                diagramPromise = Promise.resolve();
+            }
         }).catch(function (e) {
             showErr('读取失败: ' + e.message);
         });
@@ -98,6 +104,7 @@
     function reset() {
         currentText = '';
         currentName = '';
+        diagramPromise = null;
         contentEl.innerHTML = '';
         clearErr();
         hide(viewEl);
@@ -112,6 +119,7 @@
         'h1{font-size:1.8em;border-bottom:2px solid #eee;padding-bottom:.3em;}' +
         'h2{font-size:1.5em;border-bottom:1px solid #eee;padding-bottom:.2em;}' +
         'a{color:#3498db;}img{max-width:100%;height:auto;}' +
+        '.mermaid-img{display:block;max-width:100%;height:auto;margin:1em auto;background:#fff;}' +
         'table{border-collapse:collapse;margin:1em 0;}' +
         'th,td{border:1px solid #ddd;padding:.5em .8em;text-align:left;}' +
         'th{background:#f6f8fa;}' +
@@ -133,24 +141,46 @@
         '.hljs-emphasis{font-style:italic}' +
         '.hljs-strong{font-weight:600}';
 
-    function exportHtml() {
-        if (!currentText) return;
-        var base = (currentName || 'export').replace(/\.(md|markdown)$/i, '');
-        var content = buildContentHtml(currentText, true);
-        var full = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n'
-            + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
-            + '<title>' + escHtml(currentName) + '</title>\n'
-            + '<style>' + EXPORT_CSS + '</style>\n</head>\n<body>\n'
-            + '<main class="mdpage">' + content + '</main>\n</body>\n</html>';
-        var blob = new Blob([full], { type: 'text/html;charset=utf-8' });
+    function rewriteMdLinks(root) {
+        if (!root) return;
+        root.querySelectorAll('a[href]').forEach(function (a) {
+            var href = a.getAttribute('href') || '';
+            if (!/^(https?:)?\/\//i.test(href) && href.charAt(0) !== '#'
+                && href.charAt(0) !== '/' && /\.md(#.*)?$/i.test(href)) {
+                a.setAttribute('href', href.replace(/\.md(#.*)?$/i, '.html$1'));
+            }
+        });
+    }
+
+    function downloadHtml(fullHtml, name) {
+        var blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
-        a.download = base + '.html';
+        a.download = name;
         document.body.appendChild(a);
         a.click();
         a.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportHtml() {
+        if (!currentText) return;
+        var base = (currentName || 'export').replace(/\.(md|markdown)$/i, '');
+        var doExport = function () {
+            // 复用当前已渲染的内容（含 mermaid <img data:svg>、代码高亮、标题锚点 id）
+            var holder = document.createElement('div');
+            holder.innerHTML = contentEl.innerHTML;
+            rewriteMdLinks(holder);
+            var full = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n'
+                + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+                + '<title>' + escHtml(currentName) + '</title>\n'
+                + '<style>' + EXPORT_CSS + '</style>\n</head>\n<body>\n'
+                + '<main class="mdpage">' + holder.innerHTML + '</main>\n</body>\n</html>';
+            downloadHtml(full, base + '.html');
+        };
+        var wait = diagramPromise || Promise.resolve();
+        wait.then(doExport).catch(doExport);
     }
 
     // ==== 拖拽 ====

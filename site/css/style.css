@@ -1935,6 +1935,21 @@ footer {
 }
 
 /* ===== 局域网共享 md 网页阅读 ===== */
+.mermaid-img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 1em auto;
+    background: #fff;
+}
+.md-diagram-error {
+    padding: .5em .8em;
+    margin: .5em 0;
+    border-left: 3px solid #e67e22;
+    background: #fef9f0;
+    color: #8c6d1f;
+    font-size: .85rem;
+}
 .reader-overlay {
     position: fixed;
     top: 0;

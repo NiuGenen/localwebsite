@@ -264,6 +264,7 @@
                 readerContent.querySelectorAll('pre code').forEach(function (block) {
                     hljs.highlightElement(block);
                 });
+                if (window.renderMermaidIn) renderMermaidIn(readerContent);
             })
             .catch(function (err) {
                 readerContent.innerHTML = '<p style="color:#c0392b;padding:1rem;">加载文件失败: ' + err.message + '</p>';

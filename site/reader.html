@@ -47,6 +47,7 @@
     </footer>
     <script src="/js/marked.min.js"></script>
     <script src="/js/highlight.min.js"></script>
+    <script src="/js/md-diagram.js"></script>
     <script src="/js/copy.js"></script>
     <script>
 (function () {
@@ -167,6 +168,7 @@
                 contentEl.querySelectorAll('pre code').forEach(function (block) {
                     hljs.highlightElement(block);
                 });
+                if (window.renderMermaidIn) renderMermaidIn(contentEl);
             })
             .catch(function (err) {
                 hide(loadingEl);
