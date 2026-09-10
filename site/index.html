@@ -75,6 +75,12 @@
                 <p>拖入 Markdown 文件即时渲染阅读，支持导出独立 HTML 与文档间跳转。</p>
                 <a href="/mdreader.html" class="btn">开始阅读</a>
             </div>
+            <div class="card card-temp">
+                <div class="card-icon">🗒️</div>
+                <h3>临时文本</h3>
+                <p>随手记录临时文本内容，按添加顺序展示。</p>
+                <a href="/temp.html" class="btn">进入</a>
+            </div>
             <div id="pinned-cards"></div>
             <div class="homecards-head" id="homecards-head" style="display:none">
                 <h3>自定义网页</h3>
@@ -111,6 +117,16 @@
     <script>
     (function () {
         var card = document.querySelector('.card-reader');
+        if (!card) return;
+        fetch('/api/local')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.local) card.style.display = 'none';
+            })
+            .catch(function () { card.style.display = 'none'; });
+    })();
+    (function () {
+        var card = document.querySelector('.card-temp');
         if (!card) return;
         fetch('/api/local')
             .then(function (r) { return r.json(); })

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>临时文本 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=22">
+</head>
+<body>
+    <header>
+        <h1>本地文件站</h1>
+        <nav>
+            <a href="/">首页</a>
+            <a href="/files/">文件浏览</a>
+            <a href="/peers.html">局域网共享</a>
+            <a href="/info.html">关于</a>
+        </nav>
+    </header>
+    <main>
+        <section class="temp-panel">
+            <div class="temp-head">
+                <h2>临时文本</h2>
+                <div class="temp-head-actions">
+                    <button type="button" class="btn btn-sm" id="temp-edit-btn" style="display:none">编辑</button>
+                    <button type="button" class="btn btn-sm btn-success" id="temp-create-btn">新增</button>
+                </div>
+            </div>
+            <div id="temp-list" class="temp-list"></div>
+            <p class="temp-loading" id="temp-loading">加载中...</p>
+            <p class="temp-empty" id="temp-empty" style="display:none">暂无内容，点击右上角「新增」开始。</p>
+            <p class="temp-error" id="temp-error" style="display:none"></p>
+        </section>
+    </main>
+    <footer>
+        <p>&copy; 2026 本地文件站</p>
+    </footer>
+
+    <div class="fb-modal-overlay" id="temp-modal" style="display:none">
+        <div class="fb-modal fb-modal-lg">
+            <h3 class="fb-modal-title" id="temp-modal-head">新增内容</h3>
+            <input type="text" id="temp-modal-title" class="fb-modal-input" placeholder="标题" maxlength="100">
+            <textarea id="temp-modal-content" class="fb-modal-textarea" placeholder="文本内容" maxlength="100000"></textarea>
+            <p class="fb-modal-hint" id="temp-modal-hint"></p>
+            <div class="fb-modal-actions">
+                <button type="button" class="btn" id="temp-modal-cancel">取消</button>
+                <button type="button" class="btn btn-success" id="temp-modal-confirm">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/layout.js"></script>
+    <script src="/js/temp.js?v=1"></script>
+</body>
+</html>

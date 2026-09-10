@@ -38,6 +38,9 @@ TODO_STATUSES = {"pending", "in_progress", "paused"}
 # ===== 实用功能数据文件 =====
 FEATURES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "features.json")
 
+# ===== 临时文本数据文件 =====
+TEMP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "temp_notes.json")
+
 # ===== 首页自定义网页卡片数据文件 =====
 LINKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "links.json")
 
@@ -538,6 +541,93 @@ def api_features_delete(feature_id):
     if len(new_features) == len(features):
         return jsonify({"error": "功能不存在"}), 404
     save_features(new_features)
+    return jsonify({"success": True})
+
+# ===== 临时文本 API =====
+
+def load_temp_notes():
+    try:
+        with open(TEMP_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data if isinstance(data, list) else []
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return []
+
+def save_temp_notes(notes):
+    tmp = TEMP_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(notes, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, TEMP_FILE)
+
+@app.route("/api/temp", methods=["GET"])
+def api_temp_list():
+    notes = load_temp_notes()
+    notes.reverse()
+    notes.sort(key=lambda n: n.get("created", 0), reverse=True)
+    return jsonify(notes)
+
+@app.route("/api/temp", methods=["POST"])
+def api_temp_create():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    title = (data.get("title") or "").strip()
+    content = (data.get("content") or "").strip()
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+    if len(title) > 100:
+        return jsonify({"error": "标题过长"}), 400
+    if not content:
+        return jsonify({"error": "内容不能为空"}), 400
+    if len(content) > 100000:
+        return jsonify({"error": "内容过长"}), 400
+
+    item = {
+        "id": uuid.uuid4().hex,
+        "title": title,
+        "content": content,
+        "created": int(time.time()),
+    }
+    notes = load_temp_notes()
+    notes.append(item)
+    save_temp_notes(notes)
+    return jsonify(item), 201
+
+@app.route("/api/temp/<note_id>", methods=["PUT"])
+def api_temp_update(note_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    notes = load_temp_notes()
+    for n in notes:
+        if n["id"] == note_id:
+            if "title" in data:
+                title = (data["title"] or "").strip()
+                if not title:
+                    return jsonify({"error": "标题不能为空"}), 400
+                if len(title) > 100:
+                    return jsonify({"error": "标题过长"}), 400
+                n["title"] = title
+            if "content" in data:
+                content = (data.get("content") or "").strip()
+                if not content:
+                    return jsonify({"error": "内容不能为空"}), 400
+                if len(content) > 100000:
+                    return jsonify({"error": "内容过长"}), 400
+                n["content"] = content
+            save_temp_notes(notes)
+            return jsonify(n)
+    return jsonify({"error": "内容不存在"}), 404
+
+@app.route("/api/temp/<note_id>", methods=["DELETE"])
+def api_temp_delete(note_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    notes = load_temp_notes()
+    new_notes = [n for n in notes if n["id"] != note_id]
+    if len(new_notes) == len(notes):
+        return jsonify({"error": "内容不存在"}), 404
+    save_temp_notes(new_notes)
     return jsonify({"success": True})
 
 # ===== 首页自定义网页卡片 API =====

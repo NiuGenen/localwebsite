@@ -27,12 +27,13 @@
   - **防火墙自处理**：peer.py 检测本机 firewalld/ufw，root 运行时自动放行所选端口（关闭时自动移除），普通用户运行时打印放行命令提示。
   - 在线判定 `PEER_TTL`（默认 90s，即 3 个心跳周期）；**主动关闭** peer.py 时会向中心站发送下线通知立即移除，否则超过 TTL 未心跳的节点会被**自动清除**（不再保留离线机器信息）。
   - 门户页**只显示在线机器**，不提供离线展示。
+- **临时文本**：随手记录临时文本（标题 + 文本内容），服务端持久化（`site/temp_notes.json`），按添加顺序展示、**新增排最上**；进入编辑模式可对每条**编辑/删除**。**页面与 API 均仅限 localhost**，首页卡片仅在 localhost 显示。
 - **待办事项**：服务端持久化（`site/todo.json`），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
 - **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`site/features.json`），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
   - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
-- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」的管理入口仅在 localhost 访问时显示。
+- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」「临时文本」的管理入口仅在 localhost 访问时显示。
 
 ## 架构
 
@@ -67,6 +68,7 @@
     ├── pages.html      # 自定义页面列表（创建、贴首页）
     ├── custom.html     # 自定义页面查看（页面文件浏览器 + 阅读）
     ├── todo.html       # 待办事项页面
+    ├── temp.html       # 临时文本页面（仅本机）
     ├── features.html   # 实用功能页面（卡片列表 + 搜索 + 本机编辑模式）
     ├── info.html       # 关于页
     ├── files/          # 共享文件目录（gitignored）
@@ -109,6 +111,7 @@
 | `TODO_FILE` | 待办数据文件路径（`site/todo.json`） |
 | `PRIORITIES` | 待办优先级白名单（`high` / `medium` / `low`） |
 | `FEATURES_FILE` | 实用功能数据文件路径（`site/features.json`） |
+| `TEMP_FILE` | 临时文本数据文件（`site/temp_notes.json`） |
 | `LINKS_FILE` | 首页自定义网页卡片数据文件（`site/links.json`） |
 | `PEERS_FILE` | 局域网共享节点注册表（`site/peers.json`） |
 | `PEER_SECRET` | 节点注册密钥（`openssl rand -hex 16` 生成；门户页对访客展示，便于自服务部署） |
@@ -119,7 +122,7 @@
 
 ### nginx.conf
 
-- `/todo.html`、`/features.html` 与 `/api/todo`、`/api/features`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
+- `/todo.html`、`/features.html`、`/temp.html` 与 `/api/todo`、`/api/features`、`/api/temp`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
 - `/peer.py`：直接下发 `scripts/peer.py`（单一来源，供各机器下载运行）
 - `/api/`：反向代理到 Flask，`client_max_body_size 1g`（上传大小限制，可调）；上传缓冲目录 `client_body_temp_path` 位于磁盘（`nginx_client_body/`），避免大文件上传占用系统内存
 
@@ -182,6 +185,8 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 | GET / POST | `/api/todo` | 待办列表 / 添加 |
 | PUT / DELETE | `/api/todo/<id>` | 更新 / 删除待办 |
 | GET / POST | `/api/features` | 实用功能列表（支持 `?q=` 服务端搜索）/ 创建（仅本机） |
+| GET / POST | `/api/temp` | 临时文本列表 / 新增（均仅本机） |
+| PUT / DELETE | `/api/temp/<id>` | 编辑 / 删除临时文本（仅本机） |
 | PUT / DELETE | `/api/features/<id>` | 更新 / 删除实用功能（仅本机） |
 | GET / POST | `/api/links` | 首页自定义网页卡片列表（开放）/ 添加（仅本机） |
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
@@ -209,4 +214,4 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 - **本机操作限制**：待办、实用功能、自定义网页卡片、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机；首页自定义网页卡片列表读取对所有局域网访客开放。
 - **节点注册鉴权**：局域网共享节点必须携带 `PEER_SECRET` 注册，否则 403；目录列表转发仅访问注册表中存在的节点（`host/port` 只取自注册表），路径由节点侧再次校验防穿越。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。
-- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json`、`site/peers.json` 均已加入 `.gitignore`，不入库。
+- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json`、`site/peers.json`、`site/temp_notes.json` 均已加入 `.gitignore`，不入库。
