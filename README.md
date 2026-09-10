@@ -1,6 +1,6 @@
 # 本地文件站（Local File Station）
 
-一个基于 **Nginx + Flask** 的局域网文件共享网站，提供文件浏览与管理、Markdown 阅读、自定义阅读页面、待办事项、实用功能等功能。
+一个基于 **Nginx + Flask** 的局域网文件共享网站，提供文件浏览与管理、Markdown 阅读（含图表渲染与简易客户端阅读器）、Word 在线阅读、多机局域网共享、自定义阅读页面、待办事项、临时文本、实用功能等功能。
 
 ## 功能特性
 
@@ -8,6 +8,9 @@
 - **文件操作**：多文件上传（带实时进度条，上传上限由 nginx `client_max_body_size` 控制，默认 1GB）、新建文件夹、剪切/粘贴移动文件、重命名（文件与文件夹均可）、**文件夹一键打包下载**（`/api/zip`，不压缩、流式下发，排除点文件与 `index.html`）。
 - **文件阅读入口**：`md` 文件在文件浏览中带有「阅读」按钮，点击可直接在站内 Markdown 阅读页打开。
 - **Word 在线阅读**：`.doc` / `.docx` 文件在文件浏览（本机与局域网共享）中带有「阅读」按钮，服务端转换为 HTML 后在页内阅读：`.docx` 用 Python 标准库提取（正文/标题/表格/内嵌图片）；`.doc` 用 **LibreOffice**（`soffice`)转换保真排版；结果按内容哈希缓存（`tmp_docs/`，不入库）。
+- **Markdown 图表（Mermaid）**：```mermaid 代码块在本机 Markdown 阅读器、局域网共享阅读弹层与简易阅读器中，由离线 vendored 的 `mermaid.min.js` 渲染为图（支持 `block-beta` 等）；渲染结果以 `data:` 内嵌为 `<img>`，**右键可另存为 SVG**。
+- **简易 Markdown 阅读（客户端）**：首页「简易阅读」卡片进入 `/mdreader.html`，**拖入本地 `.md` 文件**即时渲染阅读（支持文档内标题锚点跳转）；可**导出独立 HTML**（内联样式与图表、相对 `.md` 链接改写为 `.html`，导出后支持文档间相对路径跳转）。纯客户端、无需服务端、对局域网开放。
+- **Markdown 阅读入口可见性**：顶部导航不再提供「Markdown阅读」入口，首页「Markdown 阅读」卡片**仅在 localhost 显示**；仍可直接访问 `/reader.html`，文件浏览中 md 文件的「阅读」按钮不受影响。
 - **黑名单目录保护**：`binary-translation` 目录禁止上传、移动、重命名等修改操作（仍可浏览下载）。
 - **Markdown 阅读**：文件列表选择 + Markdown 渲染 + 代码高亮，显示完整文件名；支持**图片渲染**与**相对链接**（图片/链接按当前文档所在目录解析，`[链接](其他.md)` 可在阅读器内直接跳转）；阅读工具栏提供**复制全文**（一键复制原始 Markdown 源码）。
 - **自定义页面**：创建独立的 Markdown 阅读页（标题 + markdown 简介 + 文档清单），组织若干相关文档集中阅读。
@@ -33,14 +36,14 @@
   - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
-- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」「临时文本」的管理入口仅在 localhost 访问时显示。
+- **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」「临时文本」「Markdown 阅读」的管理入口仅在 localhost 访问时显示。
 
 ## 架构
 
 | 组件 | 端口 | 职责 |
 |---|---|---|
-| Nginx | 8080 | 静态页面、`/files/` autoindex、`/peer.py` 脚本下发、`/api/` 反向代理到 Flask、todo 页/API 与 features 页/API 仅限 localhost |
-| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、新建、移动、重命名、自定义页面、待办、实用功能、局域网共享节点注册与转发、本机判定） |
+| Nginx | 8080 | 静态页面、`/files/` autoindex、`/peer.py` 脚本下发、`/api/` 反向代理到 Flask、todo/features/temp 页与 API 仅限 localhost |
+| backend.py（Flask） | 5000 | 提供全部 JSON API（文件浏览、上传、打包下载、doc/docx 转 HTML、自定义页面、待办、临时文本、实用功能、局域网共享节点注册与转发、本机判定） |
 
 ## 目录结构
 
@@ -58,13 +61,14 @@
 │   ├── unsetup-systemd.sh  # 移除 systemd 服务
 │   └── peer.py             # 局域网共享节点脚本（可分发到各机器运行）
 └── site/
-    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面入口、贴首页卡片、自定义网页卡片、局域网共享入口）
+    ├── index.html      # 首页（内容宽度滑条、待办/自定义页面/实用功能/自定义网页/简易阅读/临时文本入口、贴首页卡片）
     ├── files/
     │   └── index.html  # 文件浏览器（SPA，含 md 阅读入口）
-    ├── reader.html     # Markdown 阅读器（支持图片与相对链接）
+    ├── reader.html     # Markdown 阅读器（支持图片与相对链接；导航不提供入口，仅 localhost 卡片/直接 URL）
+    ├── mdreader.html   # 简易 Markdown 阅读器（客户端拖拽 + 导出独立 HTML，入口为首页卡片）
     ├── docreader.html  # Word（.doc/.docx）在线阅读器（服务端转 HTML）
     ├── peers.html      # 局域网共享门户（peer.py 下载与运行说明 + 在线机器列表）
-    ├── peer.html       # 远程机器只读文件浏览器（列表 + 下载 + md 网页阅读）
+    ├── peer.html       # 远程机器只读文件浏览器（列表 + 下载 + 目录打包 + md/doc 网页阅读）
     ├── pages.html      # 自定义页面列表（创建、贴首页）
     ├── custom.html     # 自定义页面查看（页面文件浏览器 + 阅读）
     ├── todo.html       # 待办事项页面
@@ -74,11 +78,12 @@
     ├── files/          # 共享文件目录（gitignored）
     ├── custom/         # 自定义页面文件目录（gitignored）
     ├── custom_pages.json  # 自定义页面元数据（gitignored）
-    ├── js/             # 前端脚本（layout.js、todo.js、pages.js、custom.js、features.js、pinned.js、homecards.js、peers.js、peer.js 等）
+    ├── js/             # 前端脚本（layout.js、todo.js、temp.js、pages.js、custom.js、features.js、pinned.js、homecards.js、fulltext.js、peers.js、peer.js、mdreader.js、docreader.js、md-diagram.js、mermaid.min.js 等）
     ├── css/style.css   # 全局样式
     ├── todo.json       # 待办数据文件（gitignored）
     ├── features.json   # 实用功能数据文件（gitignored）
     ├── links.json      # 首页自定义网页卡片数据文件（gitignored）
+    ├── temp_notes.json # 临时文本数据文件（gitignored）
     └── peers.json      # 局域网共享节点注册表（gitignored）
 └── skill/
     └── local-features/ # 本地功能库技能（features.sh 维护脚本 + SKILL.md）
@@ -95,7 +100,7 @@
 
 - 本机访问：<http://localhost:8080>
 - 局域网访问：<http://服务器局域网IP:8080>
-- **待办事项、实用功能与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
+- **待办事项、临时文本、实用功能与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
 - 自定义页面/待办/实用功能查看对所有局域网用户开放。
 
 > 注：本项目使用的 Nginx 位于 `~/nginx_install/usr/sbin/nginx`（由 `apt download nginx nginx-common nginx-core` 下载后用 `dpkg-deb -x` 解压到 home）。
@@ -119,6 +124,10 @@
 | `CUSTOM_PAGES_FILE` | 自定义页面元数据文件（`site/custom_pages.json`） |
 | `CUSTOM_DIR` | 自定义页面文件根目录（`site/custom/`） |
 | `DOC_EXTS` / `IMAGE_EXTS` | 自定义页面上传允许的文档（`.md`）与图片扩展名（png/jpg/jpeg/gif/webp/bmp，不含 svg） |
+| `TMP_DOWNLOAD_DIR` | 文件夹打包临时目录（`tmp_downloads/`，不入库） |
+| `MAX_ZIP_SIZE` | 文件夹打包下载大小上限（1GB） |
+| `TMP_DOCS_DIR` | 文档（`.doc`/`.docx`）转 HTML 结果缓存目录（`tmp_docs/`，不入库） |
+| `MAX_DOC_BYTES` | 在线阅读文档大小上限（50MB） |
 
 ### nginx.conf
 
