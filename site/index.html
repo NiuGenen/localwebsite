@@ -155,6 +155,16 @@
             })
             .catch(function () { card.style.display = 'none'; });
     })();
+    (function () {
+        var card = document.querySelector('.card-pages');
+        if (!card) return;
+        fetch('/api/local')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.local) card.style.display = 'none';
+            })
+            .catch(function () { card.style.display = 'none'; });
+    })();
     </script>
 </body>
 </html>
