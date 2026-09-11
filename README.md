@@ -19,7 +19,7 @@
   - 页面可**贴到首页**形成导航卡片（仅本机可操作，卡片对所有访客可见）。
   - 阅读视图同样提供**复制全文**按钮。
   - **创建 / 编辑 / 上传 / 删除 / 贴首页** 均**仅限本机**；查看对所有局域网用户开放。
-- **自定义网页卡片**：在首页添加自定义网页卡片（标题 + 内容简介 + 目标网页链接），统一使用 🌐 logo；点击「进入网页」按钮**新标签页**打开目标地址（支持外链 `http(s)://` 与站内 `/` 相对路径）。**仅本机可添加/编辑/删除**，卡片对所有局域网访客可见（服务端持久化 `site/links.json`）。
+- **自定义网页卡片**：在首页添加自定义网页卡片（标题 + 内容简介 + 目标网页链接），统一使用 🌐 logo；点击「进入网页」按钮**新标签页**打开目标地址（支持外链 `http(s)://` 与站内 `/` 相对路径）。**仅本机可添加/编辑/删除**，卡片对所有局域网访客可见（服务端持久化 `data/app.db` 的 `links` 表）。
 - **多机局域网共享**：局域网内任意机器可运行 `scripts/peer.py`（仅 Python 标准库）以只读方式共享一个目录，并每 30s 向中心站心跳注册；中心站「局域网共享」门户（`peers.html`）汇总在线机器与其共享目录，供访客统一浏览下载。
   - 目录列表由中心站**服务端转发**（`/api/peers/<id>/tree`，无 CORS 问题）；文件**下载直连各机器**（`http://<机器IP>:<端口>/files/...`，不占中心站带宽，支持 Range 断点续传/视频拖进度条）。
   - 远程 `.md` 文件可在网页内**直接阅读**（`/api/peers/<id>/file` 经中心站读取，支持代码高亮与相对图片/链接解析到该节点）。
@@ -30,9 +30,9 @@
   - **防火墙自处理**：peer.py 检测本机 firewalld/ufw，root 运行时自动放行所选端口（关闭时自动移除），普通用户运行时打印放行命令提示。
   - 在线判定 `PEER_TTL`（默认 90s，即 3 个心跳周期）；**主动关闭** peer.py 时会向中心站发送下线通知立即移除，否则超过 TTL 未心跳的节点会被**自动清除**（不再保留离线机器信息）。
   - 门户页**只显示在线机器**，不提供离线展示。
-- **临时文本**：随手记录临时文本（标题 + 文本内容），服务端持久化（`site/temp_notes.json`），按添加顺序展示、**新增排最上**；进入编辑模式可对每条**编辑/删除**。**页面与 API 均仅限 localhost**，首页卡片仅在 localhost 显示。
-- **待办事项**：服务端持久化（`site/todo.json`），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
-- **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`site/features.json`），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
+- **临时文本**：随手记录临时文本（标题 + 文本内容），服务端持久化（`data/app.db` 的 `temp_notes` 表），按添加顺序展示、**新增排最上**；进入编辑模式可对每条**编辑/删除**。**页面与 API 均仅限 localhost**，首页卡片仅在 localhost 显示。
+- **待办事项**：服务端持久化（`data/app.db` 的 `todos` 表），支持添加、行内编辑、删除、优先级（高/中/低，点击循环切换）、**状态标记**（未完成项循环：开始 → 进行中 → 暂停 → 进行中；暂停时点击状态按钮恢复进行中，或点击旁侧 `×` 重置为未开始；进行中排最前、暂停居中，蓝色/橙色高亮，并带分组标题条区分）、按时间/名称/优先级排序、完成沉底置灰。**仅限 localhost 访问**。
+- **实用功能**：以卡片形式记录实用命令与小技巧（`features.html`），服务端持久化（`data/app.db` 的 `features` 表），支持**按标题/内容搜索**（服务端过滤）、瀑布流多栏卡片布局。
   - **创建 / 编辑 / 删除**均**仅限本机**：页面与 `/api/features` 均由 nginx 限定 localhost；进入页面后可点「创建」新增，点「编辑」进入编辑模式后每张卡片出现「编辑」「删除」按钮（默认不显示）。
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
@@ -51,8 +51,12 @@
 .
 ├── nginx.conf          # Nginx 配置
 ├── backend.py          # Flask 后端（全部 API）
+├── storage.py          # SQLite 存储、事务与旧 JSON 导入
+├── data/               # SQLite 数据库与迁移备份（gitignored，不对外提供静态访问）
 ├── venv/               # Python 虚拟环境（Flask）
 ├── scripts/            # 管理脚本
+│   ├── migrate_sqlite.py   # 停止旧后端后执行的一次性迁移
+│   ├── backup_sqlite.py    # SQLite 在线一致性备份
 │   ├── start.sh            # 启动脚本（Flask + Nginx）
 │   ├── stop.sh             # 停止脚本
 │   ├── setup-systemd.sh    # 配置开机自启
@@ -77,14 +81,8 @@
     ├── info.html       # 关于页
     ├── files/          # 共享文件目录（gitignored）
     ├── custom/         # 自定义页面文件目录（gitignored）
-    ├── custom_pages.json  # 自定义页面元数据（gitignored）
     ├── js/             # 前端脚本（layout.js、todo.js、temp.js、pages.js、custom.js、features.js、pinned.js、homecards.js、fulltext.js、peers.js、peer.js、mdreader.js、docreader.js、md-diagram.js、mermaid.min.js 等）
-    ├── css/style.css   # 全局样式
-    ├── todo.json       # 待办数据文件（gitignored）
-    ├── features.json   # 实用功能数据文件（gitignored）
-    ├── links.json      # 首页自定义网页卡片数据文件（gitignored）
-    ├── temp_notes.json # 临时文本数据文件（gitignored）
-    └── peers.json      # 局域网共享节点注册表（gitignored）
+    └── css/style.css   # 全局样式
 └── skill/
     └── local-features/ # 本地功能库技能（features.sh 维护脚本 + SKILL.md）
 ```
@@ -94,6 +92,7 @@
 依赖：Nginx、Python3 + venv（Flask）。Word（.doc）在线阅读需额外安装 **LibreOffice**（`sudo apt-get install -y libreoffice`）。
 
 ```bash
+./venv/bin/python3 scripts/migrate_sqlite.py --archive-legacy  # 首次启动前初始化/导入；旧后端必须已停止
 ./scripts/start.sh     # 启动 Flask 后端 + Nginx
 ./scripts/stop.sh      # 停止服务
 ```
@@ -101,9 +100,39 @@
 - 本机访问：<http://localhost:8080>
 - 局域网访问：<http://服务器局域网IP:8080>
 - **待办事项、临时文本、实用功能与自定义页面的创建/管理需使用 `http://localhost:8080` 访问**（仅限本机）。
-- 自定义页面/待办/实用功能查看对所有局域网用户开放。
+- 自定义页面查看对局域网用户开放；待办、临时文本与实用功能页面/API 仅限本机。
 
 > 注：本项目使用的 Nginx 位于 `~/nginx_install/usr/sbin/nginx`（由 `apt download nginx nginx-common nginx-core` 下载后用 `dpkg-deb -x` 解压到 home）。
+
+## SQLite 存储与迁移
+
+六类元数据分别保存在 `todos`、`features`、`temp_notes`、`links`、`peers`、`pages` 表中。上传文件和自定义页面文档仍在文件系统中；API 路径、返回字段和前端使用方式保持兼容。
+
+- 每条记录独立存储；保留 ID、原始顺序、时间和额外旧字段。旧待办缺少 `status` 时，按原有 `in_progress` 规则补齐。
+- 每个请求独立连接；修改操作使用 `BEGIN IMMEDIATE` 覆盖读改写，提交或失败回滚。节点地址有唯一约束，过期清理与心跳串行提交。
+- WAL 允许读写并行，但写事务仍串行；锁等待最多 5 秒，超时返回 HTTP 503 与 `Retry-After: 1`。同字段更新仍采用最后提交者覆盖的行为。
+- 使用 `synchronous=FULL`；不要把数据库放到 NFS/SMB 等网络文件系统。自定义页面目录的删除不属于数据库事务，仍采用原有“先删除元数据，再清理目录”的行为。
+
+升级已有实例时，先停止**实际运行的所有旧 Flask 进程**（手动启动与 systemd 启动需分别确认），再执行：
+
+```bash
+./venv/bin/python3 scripts/migrate_sqlite.py --archive-legacy
+```
+
+迁移在单个事务中导入六类数据，先备份原始字节到 `data/legacy-json-<唯一标识>/`；无效 JSON、非法字段或重复 ID/节点地址会导致导入回滚，原文件保留。不存在的源文件作为空表处理。数据库记录迁移版本，重复运行不会覆盖后续修改；修复失败的源数据后可以重试。
+
+`--archive-legacy` 会核对源文件和备份的 SHA-256，然后移除静态目录内的旧 JSON；发现源文件在迁移后变化会拒绝移除。省略此参数可暂时保留源文件，但它们不再参与运行时读写。新 Nginx 配置同时阻止六类旧 JSON 及 `.json.tmp` 的静态访问。
+
+迁移成功后启动新后端，并测试、重载 Nginx 配置。首次部署的空目录也应先运行迁移命令初始化数据库；后端不会在收到请求时自动导入旧文件。指定其他路径时，迁移工具和后端统一使用 `LOCALWEBSITE_DB`，或为迁移工具指定 `--database`。
+
+在线备份使用 SQLite backup API，不能只复制仍在使用的 `app.db` 而遗漏 WAL：
+
+```bash
+./venv/bin/python3 scripts/backup_sqlite.py data/backups/app-20260911.db
+./venv/bin/python3 -m unittest discover -s tests -v
+```
+
+备份命令拒绝覆盖已有文件。恢复时停止后端，先完整保留当前数据库及其 `-wal`、`-shm` 文件，再将备份恢复到没有旧 WAL/SHM 的数据库路径，最后启动后端。回退到旧代码只可使用迁移时的 JSON 备份；切换后的 SQLite 新增修改不会自动回写旧 JSON。
 
 ## 配置说明
 
@@ -111,17 +140,12 @@
 
 | 配置项 | 说明 |
 |---|---|
+| `LOCALWEBSITE_DB`（环境变量） | SQLite 文件路径，默认项目内 `data/app.db`；必须放本地磁盘且位于静态目录之外 |
 | `LOCAL_IPS` | 本机判定集合（待办/实用功能/自定义页面管理访问控制，默认仅回环地址 `127.0.0.1` / `::1`） |
 | `BLOCKED_PATHS` | 禁止修改的目录黑名单（相对 `files/`，前缀匹配） |
-| `TODO_FILE` | 待办数据文件路径（`site/todo.json`） |
 | `PRIORITIES` | 待办优先级白名单（`high` / `medium` / `low`） |
-| `FEATURES_FILE` | 实用功能数据文件路径（`site/features.json`） |
-| `TEMP_FILE` | 临时文本数据文件（`site/temp_notes.json`） |
-| `LINKS_FILE` | 首页自定义网页卡片数据文件（`site/links.json`） |
-| `PEERS_FILE` | 局域网共享节点注册表（`site/peers.json`） |
 | `PEER_SECRET` | 节点注册密钥（`openssl rand -hex 16` 生成；门户页对访客展示，便于自服务部署） |
 | `PEER_TTL` | 节点在线判定阈值秒数（默认 90，需大于心跳间隔） |
-| `CUSTOM_PAGES_FILE` | 自定义页面元数据文件（`site/custom_pages.json`） |
 | `CUSTOM_DIR` | 自定义页面文件根目录（`site/custom/`） |
 | `DOC_EXTS` / `IMAGE_EXTS` | 自定义页面上传允许的文档（`.md`）与图片扩展名（png/jpg/jpeg/gif/webp/bmp，不含 svg） |
 | `TMP_DOWNLOAD_DIR` | 文件夹打包临时目录（`tmp_downloads/`，不入库） |
@@ -223,4 +247,4 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 - **本机操作限制**：待办、实用功能、自定义网页卡片、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机；首页自定义网页卡片列表读取对所有局域网访客开放。
 - **节点注册鉴权**：局域网共享节点必须携带 `PEER_SECRET` 注册，否则 403；目录列表转发仅访问注册表中存在的节点（`host/port` 只取自注册表），路径由节点侧再次校验防穿越。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。
-- **数据文件**：`site/files/`、`site/custom/`、`site/custom_pages.json`、`site/todo.json`、`site/features.json`、`site/links.json`、`site/peers.json`、`site/temp_notes.json` 均已加入 `.gitignore`，不入库。
+- **数据文件**：`site/files/`、`site/custom/`、`data/` 均已加入 `.gitignore`。六类元数据保存在 `data/app.db`，旧 JSON 只在迁移时读取。

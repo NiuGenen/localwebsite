@@ -11,7 +11,10 @@ import hashlib
 import subprocess
 import urllib.request
 from urllib.parse import quote
-from flask import Flask, request, jsonify, Response
+from functools import wraps
+import sqlite3
+import storage
+from flask import Flask, request, jsonify, Response, g
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024 * 1024  # 上传上限 1GB，与 nginx client_max_body_size 对齐
@@ -30,34 +33,71 @@ TMP_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_doc
 DOC_READ_EXTS = {".doc", ".docx"}
 MAX_DOC_BYTES = 50 * 1024 * 1024  # 单个文档转换/提取上限（50MB）
 
-# ===== 待办事项数据文件 =====
-TODO_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "todo.json")
+# ===== 待办事项取值 =====
 PRIORITIES = ("high", "medium", "low")
 TODO_STATUSES = {"pending", "in_progress", "paused"}
 
-# ===== 实用功能数据文件 =====
-FEATURES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "features.json")
-
-# ===== 临时文本数据文件 =====
-TEMP_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "temp_notes.json")
-
-# ===== 首页自定义网页卡片数据文件 =====
-LINKS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "links.json")
-
 # ===== 局域网共享节点（peer）注册表 =====
-PEERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "peers.json")
 PEER_SECRET = "e9f41c66bf7fbb56ee05cd6775944749"
 PEER_TTL = 90  # 在线判定阈值（秒），需大于 peer 心跳间隔
 
 # ===== 自定义页面数据 =====
 SITE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site")
-CUSTOM_PAGES_FILE = os.path.join(SITE_DIR, "custom_pages.json")
 CUSTOM_DIR = os.path.join(SITE_DIR, "custom")
 DOC_EXTS = {".md"}
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
 # ===== 禁止上传/创建的黑名单（相对 files/，前缀匹配）=====
 BLOCKED_PATHS = ["binary-translation"]
+
+# ===== SQLite：每个请求独立连接，写操作从读取前开始事务 =====
+app.config["DATABASE"] = os.environ.get("LOCALWEBSITE_DB", os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "app.db"))
+
+
+def get_db():
+    if "db" not in g:
+        db = storage.connect(app.config["DATABASE"])
+        try:
+            storage.check_schema(db)
+        except Exception:
+            db.close()
+            raise
+        g.db = db
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(error=None):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
+
+
+def db_write(func):
+    @wraps(func)
+    def wrapped(*args, **kwargs):
+        db = get_db()
+        db.execute("BEGIN IMMEDIATE")
+        try:
+            response = app.make_response(func(*args, **kwargs))
+            db.execute("COMMIT" if response.status_code < 400 else "ROLLBACK")
+            return response
+        except BaseException:
+            if db.in_transaction:
+                db.execute("ROLLBACK")
+            raise
+    return wrapped
+
+
+@app.errorhandler(sqlite3.OperationalError)
+def database_error(error):
+    code = getattr(error, "sqlite_errorcode", 0) or 0
+    if (code & 255) in (sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED):
+        return jsonify({"error": "数据库繁忙，请稍后重试"}), 503, {"Retry-After": "1"}
+    app.logger.exception("SQLite operation failed")
+    return jsonify({"error": "数据库操作失败"}), 500
+
 
 # ===== 路径工具 =====
 
@@ -370,29 +410,15 @@ def api_local():
 # ===== 待办事项 API =====
 
 def load_todos():
-    try:
-        with open(TODO_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            if not isinstance(data, list):
-                return []
-            for it in data:
-                if "status" not in it:
-                    it["status"] = "in_progress" if it.get("in_progress") else "pending"
-            return data
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "todos")
 
-def save_todos(todos):
-    tmp = TODO_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(todos, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, TODO_FILE)
 
 @app.route("/api/todo", methods=["GET"])
 def api_todo_list():
     return jsonify(load_todos())
 
 @app.route("/api/todo", methods=["POST"])
+@db_write
 def api_todo_add():
     data = request.get_json() or {}
     text = (data.get("text") or "").strip()
@@ -402,7 +428,6 @@ def api_todo_add():
         return jsonify({"error": "事项内容过长"}), 400
     priority = data.get("priority") if data.get("priority") in PRIORITIES else "medium"
 
-    todos = load_todos()
     item = {
         "id": uuid.uuid4().hex,
         "text": text,
@@ -412,60 +437,48 @@ def api_todo_add():
         "created": int(time.time()),
         "updated": int(time.time()),
     }
-    todos.append(item)
-    save_todos(todos)
+    storage.insert(get_db(), "todos", item)
     return jsonify(item), 201
 
 @app.route("/api/todo/<todo_id>", methods=["PUT"])
+@db_write
 def api_todo_update(todo_id):
     data = request.get_json() or {}
-    todos = load_todos()
-    for it in todos:
-        if it["id"] == todo_id:
-            if "text" in data:
-                t = (data["text"] or "").strip()
-                if not t:
-                    return jsonify({"error": "事项内容不能为空"}), 400
-                if len(t) > 200:
-                    return jsonify({"error": "事项内容过长"}), 400
-                it["text"] = t
-            if "priority" in data and data["priority"] in PRIORITIES:
-                it["priority"] = data["priority"]
-            if "done" in data:
-                it["done"] = bool(data["done"])
-                if it["done"]:
-                    it["status"] = "pending"
-            if "status" in data and data["status"] in TODO_STATUSES:
-                it["status"] = data["status"]
-            it["updated"] = int(time.time())
-            save_todos(todos)
-            return jsonify(it)
-    return jsonify({"error": "待办事项不存在"}), 404
+    it = storage.get(get_db(), "todos", todo_id)
+    if it is None:
+        return jsonify({"error": "待办事项不存在"}), 404
+    if "text" in data:
+        t = (data["text"] or "").strip()
+        if not t:
+            return jsonify({"error": "事项内容不能为空"}), 400
+        if len(t) > 200:
+            return jsonify({"error": "事项内容过长"}), 400
+        it["text"] = t
+    if "priority" in data and data["priority"] in PRIORITIES:
+        it["priority"] = data["priority"]
+    if "done" in data:
+        it["done"] = bool(data["done"])
+        if it["done"]:
+            it["status"] = "pending"
+    if "status" in data and data["status"] in TODO_STATUSES:
+        it["status"] = data["status"]
+    it["updated"] = int(time.time())
+    storage.update(get_db(), "todos", it)
+    return jsonify(it)
 
 @app.route("/api/todo/<todo_id>", methods=["DELETE"])
+@db_write
 def api_todo_delete(todo_id):
-    todos = load_todos()
-    new_todos = [it for it in todos if it["id"] != todo_id]
-    if len(new_todos) == len(todos):
+    if not storage.delete(get_db(), "todos", todo_id):
         return jsonify({"error": "待办事项不存在"}), 404
-    save_todos(new_todos)
     return jsonify({"success": True})
+
 
 # ===== 实用功能 API =====
 
 def load_features():
-    try:
-        with open(FEATURES_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "features")
 
-def save_features(features):
-    tmp = FEATURES_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(features, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, FEATURES_FILE)
 
 @app.route("/api/features", methods=["GET"])
 def api_features_list():
@@ -480,6 +493,7 @@ def api_features_list():
     return jsonify(features)
 
 @app.route("/api/features", methods=["POST"])
+@db_write
 def api_features_create():
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
@@ -501,63 +515,50 @@ def api_features_create():
         "content": content,
         "created": int(time.time()),
     }
-    features = load_features()
-    features.append(item)
-    save_features(features)
+    storage.insert(get_db(), "features", item)
     return jsonify(item), 201
 
 @app.route("/api/features/<feature_id>", methods=["PUT"])
+@db_write
 def api_features_update(feature_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
     data = request.get_json() or {}
-    features = load_features()
-    for f in features:
-        if f["id"] == feature_id:
-            if "title" in data:
-                title = (data["title"] or "").strip()
-                if not title:
-                    return jsonify({"error": "标题不能为空"}), 400
-                if len(title) > 100:
-                    return jsonify({"error": "标题过长"}), 400
-                f["title"] = title
-            if "content" in data:
-                content = (data.get("content") or "").strip()
-                if not content:
-                    return jsonify({"error": "内容不能为空"}), 400
-                if len(content) > 5000:
-                    return jsonify({"error": "内容过长"}), 400
-                f["content"] = content
-            save_features(features)
-            return jsonify(f)
-    return jsonify({"error": "功能不存在"}), 404
+    f = storage.get(get_db(), "features", feature_id)
+    if f is None:
+        return jsonify({"error": "功能不存在"}), 404
+    if "title" in data:
+        title = (data["title"] or "").strip()
+        if not title:
+            return jsonify({"error": "标题不能为空"}), 400
+        if len(title) > 100:
+            return jsonify({"error": "标题过长"}), 400
+        f["title"] = title
+    if "content" in data:
+        content = (data.get("content") or "").strip()
+        if not content:
+            return jsonify({"error": "内容不能为空"}), 400
+        if len(content) > 5000:
+            return jsonify({"error": "内容过长"}), 400
+        f["content"] = content
+    storage.update(get_db(), "features", f)
+    return jsonify(f)
 
 @app.route("/api/features/<feature_id>", methods=["DELETE"])
+@db_write
 def api_features_delete(feature_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
-    features = load_features()
-    new_features = [f for f in features if f["id"] != feature_id]
-    if len(new_features) == len(features):
+    if not storage.delete(get_db(), "features", feature_id):
         return jsonify({"error": "功能不存在"}), 404
-    save_features(new_features)
     return jsonify({"success": True})
+
 
 # ===== 临时文本 API =====
 
 def load_temp_notes():
-    try:
-        with open(TEMP_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "temp_notes")
 
-def save_temp_notes(notes):
-    tmp = TEMP_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(notes, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, TEMP_FILE)
 
 @app.route("/api/temp", methods=["GET"])
 def api_temp_list():
@@ -567,6 +568,7 @@ def api_temp_list():
     return jsonify(notes)
 
 @app.route("/api/temp", methods=["POST"])
+@db_write
 def api_temp_create():
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
@@ -588,63 +590,50 @@ def api_temp_create():
         "content": content,
         "created": int(time.time()),
     }
-    notes = load_temp_notes()
-    notes.append(item)
-    save_temp_notes(notes)
+    storage.insert(get_db(), "temp_notes", item)
     return jsonify(item), 201
 
 @app.route("/api/temp/<note_id>", methods=["PUT"])
+@db_write
 def api_temp_update(note_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
     data = request.get_json() or {}
-    notes = load_temp_notes()
-    for n in notes:
-        if n["id"] == note_id:
-            if "title" in data:
-                title = (data["title"] or "").strip()
-                if not title:
-                    return jsonify({"error": "标题不能为空"}), 400
-                if len(title) > 100:
-                    return jsonify({"error": "标题过长"}), 400
-                n["title"] = title
-            if "content" in data:
-                content = (data.get("content") or "").strip()
-                if not content:
-                    return jsonify({"error": "内容不能为空"}), 400
-                if len(content) > 100000:
-                    return jsonify({"error": "内容过长"}), 400
-                n["content"] = content
-            save_temp_notes(notes)
-            return jsonify(n)
-    return jsonify({"error": "内容不存在"}), 404
+    n = storage.get(get_db(), "temp_notes", note_id)
+    if n is None:
+        return jsonify({"error": "内容不存在"}), 404
+    if "title" in data:
+        title = (data["title"] or "").strip()
+        if not title:
+            return jsonify({"error": "标题不能为空"}), 400
+        if len(title) > 100:
+            return jsonify({"error": "标题过长"}), 400
+        n["title"] = title
+    if "content" in data:
+        content = (data.get("content") or "").strip()
+        if not content:
+            return jsonify({"error": "内容不能为空"}), 400
+        if len(content) > 100000:
+            return jsonify({"error": "内容过长"}), 400
+        n["content"] = content
+    storage.update(get_db(), "temp_notes", n)
+    return jsonify(n)
 
 @app.route("/api/temp/<note_id>", methods=["DELETE"])
+@db_write
 def api_temp_delete(note_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
-    notes = load_temp_notes()
-    new_notes = [n for n in notes if n["id"] != note_id]
-    if len(new_notes) == len(notes):
+    if not storage.delete(get_db(), "temp_notes", note_id):
         return jsonify({"error": "内容不存在"}), 404
-    save_temp_notes(new_notes)
     return jsonify({"success": True})
+
 
 # ===== 首页自定义网页卡片 API =====
 
 def load_links():
-    try:
-        with open(LINKS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "links")
 
-def save_links(links):
-    tmp = LINKS_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(links, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, LINKS_FILE)
 
 def valid_url(url):
     return bool(re.match(r'^(https?://|/)', url))
@@ -656,6 +645,7 @@ def api_links_list():
     return jsonify(links)
 
 @app.route("/api/links", methods=["POST"])
+@db_write
 def api_links_create():
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
@@ -683,81 +673,67 @@ def api_links_create():
         "url": url,
         "created": int(time.time()),
     }
-    links = load_links()
-    links.append(item)
-    save_links(links)
+    storage.insert(get_db(), "links", item)
     return jsonify(item), 201
 
 @app.route("/api/links/<link_id>", methods=["PUT"])
+@db_write
 def api_links_update(link_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
     data = request.get_json() or {}
-    links = load_links()
-    for l in links:
-        if l["id"] == link_id:
-            if "title" in data:
-                title = (data["title"] or "").strip()
-                if not title:
-                    return jsonify({"error": "标题不能为空"}), 400
-                if len(title) > 100:
-                    return jsonify({"error": "标题过长"}), 400
-                l["title"] = title
-            if "description" in data:
-                description = (data.get("description") or "").strip()
-                if len(description) > 2000:
-                    return jsonify({"error": "简介过长"}), 400
-                l["description"] = description
-            if "url" in data:
-                url = (data.get("url") or "").strip()
-                if not url:
-                    return jsonify({"error": "目标网页链接不能为空"}), 400
-                if len(url) > 500:
-                    return jsonify({"error": "链接过长"}), 400
-                if not valid_url(url):
-                    return jsonify({"error": "链接需以 http://、https:// 或 / 开头"}), 400
-                l["url"] = url
-            save_links(links)
-            return jsonify(l)
-    return jsonify({"error": "卡片不存在"}), 404
+    l = storage.get(get_db(), "links", link_id)
+    if l is None:
+        return jsonify({"error": "卡片不存在"}), 404
+    if "title" in data:
+        title = (data["title"] or "").strip()
+        if not title:
+            return jsonify({"error": "标题不能为空"}), 400
+        if len(title) > 100:
+            return jsonify({"error": "标题过长"}), 400
+        l["title"] = title
+    if "description" in data:
+        description = (data.get("description") or "").strip()
+        if len(description) > 2000:
+            return jsonify({"error": "简介过长"}), 400
+        l["description"] = description
+    if "url" in data:
+        url = (data.get("url") or "").strip()
+        if not url:
+            return jsonify({"error": "目标网页链接不能为空"}), 400
+        if len(url) > 500:
+            return jsonify({"error": "链接过长"}), 400
+        if not valid_url(url):
+            return jsonify({"error": "链接需以 http://、https:// 或 / 开头"}), 400
+        l["url"] = url
+    storage.update(get_db(), "links", l)
+    return jsonify(l)
 
 @app.route("/api/links/<link_id>", methods=["DELETE"])
+@db_write
 def api_links_delete(link_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
-    links = load_links()
-    new_links = [l for l in links if l["id"] != link_id]
-    if len(new_links) == len(links):
+    if not storage.delete(get_db(), "links", link_id):
         return jsonify({"error": "卡片不存在"}), 404
-    save_links(new_links)
     return jsonify({"success": True})
+
 
 # ===== 局域网共享节点（peer）API =====
 
 def load_peers():
-    try:
-        with open(PEERS_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "peers")
 
-def save_peers(peers):
-    tmp = PEERS_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(peers, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, PEERS_FILE)
 
 def find_peer(peer_id):
-    for p in load_peers():
-        if p["id"] == peer_id:
-            return p
-    return None
+    return storage.get(get_db(), "peers", peer_id)
+
 
 def peer_online(peer):
     return (int(time.time()) - (peer.get("last_seen") or 0)) <= PEER_TTL
 
 @app.route("/api/peers/register", methods=["POST"])
+@db_write
 def api_peers_register():
     data = request.get_json() or {}
     secret = (data.get("secret") or "").strip()
@@ -781,14 +757,14 @@ def api_peers_register():
         return jsonify({"error": "共享目录描述过长"}), 400
 
     now = int(time.time())
-    peers = load_peers()
-    for p in peers:
-        if p.get("host") == host and p.get("port") == port:
-            p["name"] = name
-            p["dir_label"] = dir_label
-            p["last_seen"] = now
-            save_peers(peers)
-            return jsonify(p)
+    row = get_db().execute("SELECT * FROM peers WHERE host=? AND port=?", (host, port)).fetchone()
+    if row is not None:
+        p = storage.decode("peers", row)
+        p["name"] = name
+        p["dir_label"] = dir_label
+        p["last_seen"] = now
+        storage.update(get_db(), "peers", p)
+        return jsonify(p)
     peer = {
         "id": uuid.uuid4().hex[:12],
         "name": name,
@@ -798,16 +774,14 @@ def api_peers_register():
         "first_seen": now,
         "last_seen": now,
     }
-    peers.append(peer)
-    save_peers(peers)
+    storage.insert(get_db(), "peers", peer)
     return jsonify(peer), 201
 
 @app.route("/api/peers", methods=["GET"])
+@db_write
 def api_peers_list():
-    peers = load_peers()
-    online = [p for p in peers if peer_online(p)]
-    if len(online) != len(peers):
-        save_peers(online)
+    get_db().execute("DELETE FROM peers WHERE last_seen < ?", (int(time.time()) - PEER_TTL,))
+    online = load_peers()
     result = []
     for p in online:
         result.append({
@@ -824,6 +798,7 @@ def api_peers_list():
     return jsonify(result)
 
 @app.route("/api/peers/unregister", methods=["POST"])
+@db_write
 def api_peers_unregister():
     data = request.get_json() or {}
     secret = (data.get("secret") or "").strip()
@@ -833,23 +808,19 @@ def api_peers_unregister():
     port = data.get("port")
     if not host or not isinstance(port, int):
         return jsonify({"error": "参数无效"}), 400
-    peers = load_peers()
-    new_peers = [p for p in peers if not (p.get("host") == host and p.get("port") == port)]
-    if len(new_peers) == len(peers):
+    if not get_db().execute("DELETE FROM peers WHERE host=? AND port=?", (host, port)).rowcount:
         return jsonify({"error": "节点不存在"}), 404
-    save_peers(new_peers)
     return jsonify({"success": True})
 
 @app.route("/api/peers/<peer_id>", methods=["DELETE"])
+@db_write
 def api_peers_delete(peer_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
-    peers = load_peers()
-    new_peers = [p for p in peers if p["id"] != peer_id]
-    if len(new_peers) == len(peers):
+    if not storage.delete(get_db(), "peers", peer_id):
         return jsonify({"error": "节点不存在"}), 404
-    save_peers(new_peers)
     return jsonify({"success": True})
+
 
 def peer_conn_error(peer, exc):
     """把连接节点失败映射为可操作的中文提示。"""
@@ -1160,24 +1131,12 @@ def api_peers_doc(peer_id):
 # ===== 自定义页面 API =====
 
 def load_pages():
-    try:
-        with open(CUSTOM_PAGES_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data if isinstance(data, list) else []
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return []
+    return storage.all_records(get_db(), "pages")
 
-def save_pages(pages):
-    tmp = CUSTOM_PAGES_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(pages, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, CUSTOM_PAGES_FILE)
 
 def find_page(page_id):
-    for p in load_pages():
-        if p["id"] == page_id:
-            return p
-    return None
+    return storage.get(get_db(), "pages", page_id)
+
 
 def page_dir(page_id):
     return os.path.join(CUSTOM_DIR, page_id)
@@ -1225,6 +1184,7 @@ def api_pages_list():
     return jsonify(pages)
 
 @app.route("/api/pages", methods=["POST"])
+@db_write
 def api_pages_create():
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
@@ -1247,12 +1207,11 @@ def api_pages_create():
         "pinned": False,
         "created": int(time.time()),
     }
-    pages = load_pages()
-    pages.append(page)
-    save_pages(pages)
+    storage.insert(get_db(), "pages", page)
     return jsonify(page), 201
 
 @app.route("/api/pages/<page_id>", methods=["PUT"])
+@db_write
 def api_pages_update(page_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
@@ -1274,28 +1233,22 @@ def api_pages_update(page_id):
         page["description"] = description
     if "pinned" in data:
         page["pinned"] = bool(data["pinned"])
-    pages = load_pages()
-    for i, p in enumerate(pages):
-        if p["id"] == page_id:
-            pages[i] = page
-            break
-    save_pages(pages)
+    storage.update(get_db(), "pages", page)
     return jsonify(page)
 
 @app.route("/api/pages/<page_id>", methods=["DELETE"])
 def api_pages_delete(page_id):
     if not require_local():
         return jsonify({"error": "仅限本机访问"}), 403
-    page = find_page(page_id)
-    if not page:
-        return jsonify({"error": "页面不存在"}), 404
-    pages = load_pages()
-    new_pages = [p for p in pages if p["id"] != page_id]
-    save_pages(new_pages)
+    # Commit metadata first, as before; recursive filesystem removal holds no DB lock.
+    with storage.transaction(get_db()):
+        if not storage.delete(get_db(), "pages", page_id):
+            return jsonify({"error": "页面不存在"}), 404
     d = page_dir(page_id)
     if os.path.isdir(d):
         shutil.rmtree(d, ignore_errors=True)
     return jsonify({"success": True})
+
 
 @app.route("/api/pages/<page_id>/tree", methods=["GET"])
 def api_pages_tree(page_id):
@@ -1399,4 +1352,6 @@ def api_pages_delete_entry(page_id):
 
 
 if __name__ == "__main__":
+    with app.app_context():
+        get_db()  # Fail before listening if migration has not completed.
     app.run(host="127.0.0.1", port=5000, debug=False)
