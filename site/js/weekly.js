@@ -10,7 +10,14 @@
     var end = document.getElementById('weekly-end');
     var hint = document.getElementById('weekly-hint');
     var save = document.getElementById('weekly-save');
+    var previousPage = document.getElementById('weekly-page-prev');
+    var nextPage = document.getElementById('weekly-page-next');
+    var pageInfo = document.getElementById('weekly-page-info');
+    var pagination = document.getElementById('weekly-pagination');
     var editingId = null;
+    var reports = [];
+    var currentPage = 0;
+    var MONTHS_PER_PAGE = 2;
 
     function appendMonthHeader(month) {
         var parts = month.split('-');
@@ -49,21 +56,43 @@
         list.appendChild(row);
     }
 
+    function groupReportsByEndMonth() {
+        var byMonth = {};
+        reports.forEach(function (report) {
+            var month = report.week_end.slice(0, 7);
+            if (!byMonth[month]) byMonth[month] = [];
+            byMonth[month].push(report);
+        });
+        return Object.keys(byMonth).sort().reverse().map(function (month) {
+            return { month: month, reports: byMonth[month] };
+        });
+    }
+
+    function render() {
+        list.innerHTML = '';
+        empty.style.display = reports.length ? 'none' : '';
+        pagination.style.display = reports.length ? '' : 'none';
+        if (!reports.length) return;
+
+        var groups = groupReportsByEndMonth();
+        var pageCount = Math.ceil(groups.length / MONTHS_PER_PAGE);
+        currentPage = Math.max(0, Math.min(currentPage, pageCount - 1));
+        groups.slice(currentPage * MONTHS_PER_PAGE, (currentPage + 1) * MONTHS_PER_PAGE)
+            .forEach(function (group) {
+                appendMonthHeader(group.month);
+                group.reports.forEach(appendReport);
+            });
+        previousPage.disabled = currentPage === 0;
+        nextPage.disabled = currentPage === pageCount - 1;
+        pageInfo.textContent = (currentPage + 1) + '/' + pageCount;
+    }
+
     function load() {
         fetch('/api/weekly').then(function (response) {
             return response.json();
-        }).then(function (reports) {
-            list.innerHTML = '';
-            empty.style.display = reports.length ? 'none' : '';
-            var currentMonth = null;
-            reports.forEach(function (report) {
-                var month = report.week_end.slice(0, 7);
-                if (month !== currentMonth) {
-                    currentMonth = month;
-                    appendMonthHeader(month);
-                }
-                appendReport(report);
-            });
+        }).then(function (result) {
+            reports = result;
+            render();
         }).catch(function () {});
     }
 
@@ -92,6 +121,19 @@
     }
 
     create.onclick = openCreate;
+    previousPage.onclick = function () {
+        if (currentPage > 0) {
+            currentPage--;
+            render();
+        }
+    };
+    nextPage.onclick = function () {
+        var pageCount = Math.ceil(groupReportsByEndMonth().length / MONTHS_PER_PAGE);
+        if (currentPage + 1 < pageCount) {
+            currentPage++;
+            render();
+        }
+    };
     document.getElementById('weekly-cancel').onclick = function () { modal.style.display = 'none'; };
     save.onclick = function () {
         if (!title.value.trim() || !start.value || !end.value) {
