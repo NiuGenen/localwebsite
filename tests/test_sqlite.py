@@ -235,6 +235,13 @@ class SQLiteTests(unittest.TestCase):
                 self.assertNotIn('（未填写）', text)
                 self.assertNotIn('空项目', text)
                 self.assertNotIn('李四', text)
+            filtered = client.get('/api/weekly/' + report['id'] + '/export?person=张三')
+            self.assertEqual(filtered.status_code, 200)
+            self.assertIn('完成内容', filtered.get_data(as_text=True))
+            missing = client.get('/api/weekly/' + report['id'] + '/export?person=王五')
+            self.assertEqual(missing.status_code, 404)
+            self.assertEqual(missing.json['error'], '人员不存在：王五')
+            self.assertEqual(client.get('/api/weekly/' + report['id'] + '/export?person=').status_code, 400)
 
     def test_threaded_api_adds_and_independent_field_updates(self):
         self.init()

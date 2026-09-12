@@ -1360,8 +1360,18 @@ def api_weekly_submission_save(report_id):
 def api_weekly_export(report_id):
     data = weekly_detail(report_id)
     if not data: return jsonify({"error": "周报不存在"}), 404
-    view = request.args.get("view", "project"); lines = [f"# {data['title']}", f"\n时间：{data['week_start']} 至 {data['week_end']}"]
+    view = request.args.get("view", "project")
+    person = request.args.get("person")
+    if person is not None:
+        person = re.sub(r'\s+', ' ', person.strip())
+        if not person:
+            return jsonify({"error": "人员名称不能为空"}), 400
+    lines = [f"# {data['title']}", f"\n时间：{data['week_start']} 至 {data['week_end']}"]
     by_person = {s["person_name"]: s for s in data["submissions"]}
+    if person is not None:
+        if person not in by_person:
+            return jsonify({"error": "人员不存在：" + person}), 404
+        by_person = {person: by_person[person]}
     if view == "person":
         for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower()):
             filled = [(p, sub["contents"].get(p["id"], "")) for p in data["projects"]]

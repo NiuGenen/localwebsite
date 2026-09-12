@@ -219,7 +219,14 @@ python3 weekly.py export                              # 导出最新周报到终
 python3 weekly.py export <周报ID>                     # 导出指定周报到终端
 python3 weekly.py export <周报ID> > 本周周报.md        # 使用 shell 重定向保存
 python3 weekly.py export <周报ID> --view person -o 按人员.md
+python3 weekly.py export <周报ID> --person 张三        # 仅导出指定人员的内容
+python3 weekly.py export --start-time 20260101 --end-time 20261231  # 导出与时间段有交集的全部周报
+python3 weekly.py export --month 202608                # 导出与 2026 年 8 月有交集的周报
+python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 年相关周报中的内容
 ```
+
+时间段导出按周报开始日期从早到晚排列。只要周报日期与指定时间段有部分重叠便会纳入；
+使用 `--person` 时，会跳过该人员没有提交的周报。`--month` 和 `--year` 分别是整月、整年的快捷写法。
 
 脚本默认连接 `http://192.168.8.65:8080`。连接其他部署地址时，在子命令之前添加
 `--server http://<服务器IP>:8080`，或设置环境变量 `WEEKLY_SERVER`。所有命令均为只读操作。
@@ -256,7 +263,7 @@ python3 weekly.py export <周报ID> --view person -o 按人员.md
 | POST | `/api/weekly/<id>/projects` | 添加周报项目（仅本机） |
 | PUT / DELETE | `/api/weekly/<id>/projects/<project_id>` | 修改或删除项目（仅本机） |
 | GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 新增或覆盖人员提交（开放） |
-| GET | `/api/weekly/<id>/export?view=project\|person` | 导出当前视图为 Markdown（开放） |
+| GET | `/api/weekly/<id>/export?view=project\|person&person=姓名` | 导出 Markdown，可选仅导出指定人员（开放） |
 | POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |
 | POST | `/api/peers/unregister` | 节点主动下线通知（开放，校验 `PEER_SECRET`，按 `host+port` 移除） |
 | GET | `/api/peers` | 在线共享节点列表（开放；离线节点自动清除，不保留记录） |
