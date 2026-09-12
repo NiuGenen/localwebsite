@@ -1464,6 +1464,11 @@ footer {
 }
 
 .weekly-toolbar { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
+.weekly-script-tip { background:#eef7ff; border:1px solid #c9e3f7; border-left:4px solid #2980b9; border-radius:8px; padding:1.1rem 1.25rem; margin-bottom:1.25rem; }
+.weekly-script-tip h3 { color:#2c3e50; font-size:1.05rem; margin-bottom:.35rem; }
+.weekly-script-tip p { color:#566573; font-size:.92rem; margin-bottom:.65rem; }
+.weekly-script-tip pre { background:#fff; border:1px solid #d8e6f0; border-radius:6px; padding:.75rem .9rem; overflow-x:auto; color:#2c3e50; font-family:"Fira Code", "Cascadia Code", Menlo, monospace; font-size:.85rem; line-height:1.5; }
+.weekly-script-tip code { white-space:pre; }
 .weekly-section { border-top:3px solid #3498db; padding:1rem 0; }
 .weekly-section h3 { color:#2c3e50; margin-bottom:.75rem; }
 .weekly-section h4 { color:#16a085; margin: .75rem 0 .2rem; }

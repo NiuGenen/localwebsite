@@ -182,6 +182,27 @@ class SQLiteTests(unittest.TestCase):
             next_report = client.post('/api/weekly', json={'title': '第 2 周', 'week_start': '2026-09-14', 'week_end': '2026-09-20'}, headers=h)
             self.assertEqual([(p['name'], p['required']) for p in next_report.json['projects']], [('研发', True)])
 
+    def test_weekly_list_limit_preserves_order_and_validates_input(self):
+        self.init()
+        with backend.app.test_client() as client:
+            h = {'X-Real-IP': '127.0.0.1'}
+            for day in range(1, 8):
+                response = client.post('/api/weekly', json={
+                    'title': f'第 {day} 周',
+                    'week_start': f'2026-09-{day:02d}',
+                    'week_end': f'2026-09-{day:02d}',
+                }, headers=h)
+                self.assertEqual(response.status_code, 201)
+            self.assertEqual(len(client.get('/api/weekly').json), 7)
+            limited = client.get('/api/weekly?limit=5')
+            self.assertEqual(limited.status_code, 200)
+            self.assertEqual([item['title'] for item in limited.json],
+                             ['第 7 周', '第 6 周', '第 5 周', '第 4 周', '第 3 周'])
+            for value in ('', '0', '-1', 'abc'):
+                response = client.get('/api/weekly?limit=' + value)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.json['error'], 'limit 必须是正整数')
+
     def test_weekly_markdown_export_omits_unfilled_sections(self):
         self.init()
         with backend.app.test_client() as client:
@@ -202,6 +223,10 @@ class SQLiteTests(unittest.TestCase):
                 'person_name': '李四',
                 'contents': {project_ids['已填写项目']: '', project_ids['空项目']: ''}
             })
+            people = client.get('/api/weekly/' + report['id'] + '/people')
+            self.assertEqual(people.status_code, 200)
+            self.assertEqual(people.json, ['张三', '李四'])
+            self.assertEqual(client.get('/api/weekly/missing/people').status_code, 404)
             for view in ('person', 'project'):
                 exported = client.get('/api/weekly/' + report['id'] + '/export?view=' + view)
                 text = exported.get_data(as_text=True)

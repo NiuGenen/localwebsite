@@ -1233,7 +1233,19 @@ def weekly_detail(report_id):
 
 @app.route("/api/weekly", methods=["GET"])
 def api_weekly_list():
-    rows = get_db().execute("SELECT * FROM weekly_reports ORDER BY week_start DESC, created DESC, seq DESC").fetchall()
+    limit = request.args.get("limit")
+    query = "SELECT * FROM weekly_reports ORDER BY week_start DESC, created DESC, seq DESC"
+    params = ()
+    if limit is not None:
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            return jsonify({"error": "limit 必须是正整数"}), 400
+        if limit <= 0:
+            return jsonify({"error": "limit 必须是正整数"}), 400
+        query += " LIMIT ?"
+        params = (limit,)
+    rows = get_db().execute(query, params).fetchall()
     return jsonify([weekly_report(r) for r in rows])
 
 @app.route("/api/weekly", methods=["POST"])
@@ -1314,6 +1326,17 @@ def api_weekly_submissions(report_id):
     data = weekly_detail(report_id)
     if not data: return jsonify({"error": "周报不存在"}), 404
     return jsonify(data["submissions"])
+
+@app.route("/api/weekly/<report_id>/people", methods=["GET"])
+def api_weekly_people(report_id):
+    db = get_db()
+    if not db.execute("SELECT 1 FROM weekly_reports WHERE id=?", (report_id,)).fetchone():
+        return jsonify({"error": "周报不存在"}), 404
+    rows = db.execute(
+        "SELECT person_name FROM weekly_submissions WHERE report_id=? "
+        "ORDER BY person_name COLLATE NOCASE, seq", (report_id,)
+    ).fetchall()
+    return jsonify([row["person_name"] for row in rows])
 
 @app.route("/api/weekly/<report_id>/submissions", methods=["POST"])
 @db_write

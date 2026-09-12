@@ -37,7 +37,7 @@
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
 - **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」「临时文本」「Markdown 阅读」的管理入口仅在 localhost 访问时显示。
-- **每周周报**：周报列表和详情页对局域网开放，按项目或人员查看提交内容；所有人员可提交或选择已有人员修改内容，周报和项目配置仅限 localhost 管理，并支持 Markdown 导出。
+- **每周周报**：周报列表和详情页对局域网开放，按项目或人员查看提交内容；所有人员可提交或选择已有人员修改内容，周报和项目配置仅限 localhost 管理，并支持 Markdown 导出和零依赖只读 Python 客户端。
   - 周报页的“管理默认项目”入口仅 localhost 可见，可维护默认项目名称、必填状态和顺序；创建新周报时自动复制当时的默认项目，详情页仍可单独编辑当前周报项目。
 - **首页分组**：Markdown 阅读、待办事项、自定义页面、实用功能和临时文本入口集中在「本机功能」分组，位于默认卡片（含置顶阅读页）与自定义网页卡片之间；仅本机显示，访问判定失败时保持隐藏。
 
@@ -66,6 +66,7 @@
 │   ├── check-services.sh   # 检测服务状态
 │   ├── disable-systemd.sh  # 取消开机自启
 │   ├── unsetup-systemd.sh  # 移除 systemd 服务
+│   ├── weekly.py           # 周报只读 HTTP 客户端
 │   └── peer.py             # 局域网共享节点脚本（可分发到各机器运行）
 └── site/
     ├── index.html      # 首页（内容宽度滑条、待办/自定义页面/实用功能/自定义网页/简易阅读/临时文本入口、贴首页卡片）
@@ -159,7 +160,7 @@
 ### nginx.conf
 
 - `/todo.html`、`/features.html`、`/temp.html` 与 `/api/todo`、`/api/features`、`/api/temp`：仅允许 `127.0.0.1`、`::1`（其余 `deny all`）
-- `/peer.py`：直接下发 `scripts/peer.py`（单一来源，供各机器下载运行）
+- `/peer.py`、`/weekly.py`：直接下发对应的零依赖 Python 脚本（单一来源，供各机器下载运行）
 - `/api/`：反向代理到 Flask，`client_max_body_size 1g`（上传大小限制，可调）；上传缓冲目录 `client_body_temp_path` 位于磁盘（`nginx_client_body/`），避免大文件上传占用系统内存
 
 ## 多机共享使用说明
@@ -202,6 +203,27 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 
 ## API 一览
 
+### 周报只读脚本
+
+局域网机器只需 Python 3，无需安装第三方依赖：
+
+```bash
+curl -O http://<服务器IP>:8080/weekly.py
+python3 weekly.py help                                 # 显示脚本支持的操作
+python3 weekly.py                                      # 显示最新 5 个周报
+python3 weekly.py list --limit 10                     # 显示最新 10 个
+python3 weekly.py list --json                         # 输出可供程序处理的 JSON
+python3 weekly.py people <周报ID>                     # 查看已提交人员，每行一个姓名
+python3 weekly.py people <周报ID> --json              # 以 JSON 数组输出人员列表
+python3 weekly.py export                              # 导出最新周报到终端
+python3 weekly.py export <周报ID>                     # 导出指定周报到终端
+python3 weekly.py export <周报ID> > 本周周报.md        # 使用 shell 重定向保存
+python3 weekly.py export <周报ID> --view person -o 按人员.md
+```
+
+脚本默认连接 `http://192.168.8.65:8080`。连接其他部署地址时，在子命令之前添加
+`--server http://<服务器IP>:8080`，或设置环境变量 `WEEKLY_SERVER`。所有命令均为只读操作。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/files?path=` | 列出目录内容（含每项 `blocked` 标志） |
@@ -226,7 +248,8 @@ curl -O http://<服务器IP>:8080/peer.py && sudo python3 peer.py
 | PUT / DELETE | `/api/features/<id>` | 更新 / 删除实用功能（仅本机） |
 | GET / POST | `/api/links` | 首页自定义网页卡片列表（开放）/ 添加（仅本机） |
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
-| GET / POST | `/api/weekly` | 周报列表（开放）/ 创建周报（仅本机） |
+| GET / POST | `/api/weekly?limit=N` | 周报列表（开放；GET 可用正整数 `limit` 限制数量，省略则返回全部）/ 创建周报（仅本机） |
+| GET | `/api/weekly/<id>/people` | 指定周报的已提交人员名称列表（开放） |
 | GET / POST | `/api/weekly/default-projects` | 默认项目列表（开放）/ 添加默认项目（仅本机） |
 | PUT / DELETE | `/api/weekly/default-projects/<project_id>` | 修改或删除默认项目（仅本机） |
 | GET / PUT / DELETE | `/api/weekly/<id>` | 周报详情（开放）/ 修改或删除（仅本机） |
