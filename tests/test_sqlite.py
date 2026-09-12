@@ -225,11 +225,17 @@ class SQLiteTests(unittest.TestCase):
                     'week_end': f'2026-09-{day:02d}',
                 }, headers=h)
                 self.assertEqual(response.status_code, 201)
+            latest = client.get('/api/weekly?limit=1').json[0]
+            saved = client.post('/api/weekly/' + latest['id'] + '/submissions', json={
+                'person_name': '张三', 'contents': {}
+            })
+            self.assertEqual(saved.status_code, 200)
             self.assertEqual(len(client.get('/api/weekly').json), 7)
             limited = client.get('/api/weekly?limit=5')
             self.assertEqual(limited.status_code, 200)
             self.assertEqual([item['title'] for item in limited.json],
                              ['第 7 周', '第 6 周', '第 5 周', '第 4 周', '第 3 周'])
+            self.assertEqual([item['submission_count'] for item in limited.json], [1, 0, 0, 0, 0])
             for value in ('', '0', '-1', 'abc'):
                 response = client.get('/api/weekly?limit=' + value)
                 self.assertEqual(response.status_code, 400)

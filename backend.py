@@ -1234,7 +1234,10 @@ def weekly_detail(report_id):
 @app.route("/api/weekly", methods=["GET"])
 def api_weekly_list():
     limit = request.args.get("limit")
-    query = "SELECT * FROM weekly_reports ORDER BY week_start DESC, created DESC, seq DESC"
+    query = ("SELECT weekly_reports.*, "
+             "(SELECT COUNT(*) FROM weekly_submissions "
+             "WHERE weekly_submissions.report_id=weekly_reports.id) AS submission_count "
+             "FROM weekly_reports ORDER BY week_start DESC, created DESC, seq DESC")
     params = ()
     if limit is not None:
         try:

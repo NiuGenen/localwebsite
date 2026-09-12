@@ -33,9 +33,11 @@
         var link = document.createElement('a');
         link.className = 'page-entry';
         link.href = '/weekly-detail.html?id=' + encodeURIComponent(report.id);
-        link.innerHTML = '<div class="page-entry-link"><div class="page-entry-title"></div></div>';
+        link.innerHTML = '<div class="page-entry-link"><div class="page-entry-title"></div><div class="weekly-submission-count"></div></div>';
         link.querySelector('.page-entry-title').textContent =
             report.title + '（' + report.week_start + ' 至 ' + report.week_end + '）';
+        link.querySelector('.weekly-submission-count').textContent =
+            '已提交人数：' + report.submission_count;
         row.appendChild(link);
 
         if (create.style.display !== 'none') {
