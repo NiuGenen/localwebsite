@@ -1253,13 +1253,13 @@ def api_weekly_list():
 def api_weekly_create():
     if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
     data = request.get_json() or {}
-    title, desc = (data.get("title") or "").strip(), (data.get("description") or "").strip()
+    title = (data.get("title") or "").strip()
     start, end = (data.get("week_start") or "").strip(), (data.get("week_end") or "").strip()
     if not title or not start or not end: return jsonify({"error": "标题、开始日期和结束日期不能为空"}), 400
     if not re.match(r'^\d{4}-\d{2}-\d{2}$', start) or not re.match(r'^\d{4}-\d{2}-\d{2}$', end) or start > end:
         return jsonify({"error": "日期格式无效或开始日期晚于结束日期"}), 400
-    now = int(time.time()); item = {"id": uuid.uuid4().hex[:12], "title": title, "description": desc, "week_start": start, "week_end": end, "created": now, "updated": now}
-    get_db().execute("INSERT INTO weekly_reports(id,title,description,week_start,week_end,created,updated) VALUES (?,?,?,?,?,?,?)", tuple(item.values()))
+    now = int(time.time()); item = {"id": uuid.uuid4().hex[:12], "title": title, "week_start": start, "week_end": end, "created": now, "updated": now}
+    get_db().execute("INSERT INTO weekly_reports(id,title,week_start,week_end,created,updated) VALUES (?,?,?,?,?,?)", tuple(item.values()))
     defaults = get_db().execute("SELECT name,required,position FROM weekly_default_projects ORDER BY position,seq").fetchall()
     for project in defaults:
         pid = uuid.uuid4().hex[:12]
@@ -1277,9 +1277,9 @@ def api_weekly_update(report_id):
     if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
     report = get_db().execute("SELECT * FROM weekly_reports WHERE id=?", (report_id,)).fetchone()
     if not report: return jsonify({"error": "周报不存在"}), 404
-    data = request.get_json() or {}; title = (data.get("title", report["title"]) or "").strip(); desc = (data.get("description", report["description"]) or "").strip(); start = (data.get("week_start", report["week_start"]) or "").strip(); end = (data.get("week_end", report["week_end"]) or "").strip()
+    data = request.get_json() or {}; title = (data.get("title", report["title"]) or "").strip(); start = (data.get("week_start", report["week_start"]) or "").strip(); end = (data.get("week_end", report["week_end"]) or "").strip()
     if not title or not re.match(r'^\d{4}-\d{2}-\d{2}$', start) or not re.match(r'^\d{4}-\d{2}-\d{2}$', end) or start > end: return jsonify({"error": "标题或日期无效"}), 400
-    get_db().execute("UPDATE weekly_reports SET title=?,description=?,week_start=?,week_end=?,updated=? WHERE id=?", (title, desc, start, end, int(time.time()), report_id))
+    get_db().execute("UPDATE weekly_reports SET title=?,week_start=?,week_end=?,updated=? WHERE id=?", (title, start, end, int(time.time()), report_id))
     return jsonify(weekly_detail(report_id))
 
 @app.route("/api/weekly/<report_id>", methods=["DELETE"])

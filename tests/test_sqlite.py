@@ -174,13 +174,45 @@ class SQLiteTests(unittest.TestCase):
             h = {'X-Real-IP': '127.0.0.1'}
             default = client.post('/api/weekly/default-projects', json={'name': '研发', 'required': True}, headers=h)
             self.assertEqual(default.status_code, 201)
-            report = client.post('/api/weekly', json={'title': '第 1 周', 'week_start': '2026-09-07', 'week_end': '2026-09-13'}, headers=h)
+            report = client.post('/api/weekly', json={'title': '第 1 周', 'description': '不应保存', 'week_start': '2026-09-07', 'week_end': '2026-09-13'}, headers=h)
             self.assertEqual(report.status_code, 201)
+            self.assertNotIn('description', report.json)
             self.assertEqual([(p['name'], p['required']) for p in report.json['projects']], [('研发', True)])
             changed = client.put('/api/weekly/' + report.json['id'] + '/projects/' + report.json['projects'][0]['id'], json={'name': '研发（本周）', 'required': False, 'position': 0}, headers=h)
             self.assertEqual(changed.status_code, 200)
+            updated = client.put('/api/weekly/' + report.json['id'], json={'description': '仍不应保存'}, headers=h)
+            self.assertEqual(updated.status_code, 200)
+            self.assertNotIn('description', updated.json)
             next_report = client.post('/api/weekly', json={'title': '第 2 周', 'week_start': '2026-09-14', 'week_end': '2026-09-20'}, headers=h)
             self.assertEqual([(p['name'], p['required']) for p in next_report.json['projects']], [('研发', True)])
+
+    def test_weekly_schema_upgrade_drops_description_and_preserves_relations(self):
+        self.init()
+        db = storage.connect(self.database)
+        try:
+            with storage.transaction(db):
+                db.execute("ALTER TABLE weekly_reports ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+                db.execute("UPDATE metadata SET value='1' WHERE key='schema_version'")
+                db.execute("INSERT INTO weekly_reports(id,title,week_start,week_end,created,updated,description) VALUES(?,?,?,?,?,?,?)",
+                           ('old-report', '旧周报', '2026-08-03', '2026-08-07', 1, 1, '直接删除的简介'))
+                db.execute("INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) VALUES(?,?,?,?,?,?,?)",
+                           ('old-project', 'old-report', '项目', 0, 0, 1, 1))
+                db.execute("INSERT INTO weekly_submissions(id,report_id,person_name,contents,created,updated) VALUES(?,?,?,?,?,?)",
+                           ('old-submission', 'old-report', '张三', '{}', 1, 1))
+        finally:
+            db.close()
+
+        self.assertTrue(storage.migrate(self.database, self.source))
+        db = storage.connect(self.database)
+        try:
+            self.assertNotIn('description', {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')})
+            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '2')
+            self.assertEqual(db.execute('SELECT title FROM weekly_reports').fetchone()[0], '旧周报')
+            self.assertEqual(db.execute('SELECT name FROM weekly_projects').fetchone()[0], '项目')
+            self.assertEqual(db.execute('SELECT person_name FROM weekly_submissions').fetchone()[0], '张三')
+        finally:
+            db.close()
+        self.assertFalse(storage.migrate(self.database, self.source))
 
     def test_weekly_list_limit_preserves_order_and_validates_input(self):
         self.init()

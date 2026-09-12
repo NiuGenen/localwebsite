@@ -20,6 +20,7 @@ COLUMNS = {
     'pages': {'title': 'TEXT', 'description': 'TEXT', 'pinned': 'INTEGER', 'created': 'INTEGER'},
 }
 BOOLS = {'done', 'pinned'}
+SCHEMA_VERSION = '2'
 
 
 
@@ -53,8 +54,8 @@ def create_schema(db):
     db.execute('CREATE INDEX IF NOT EXISTS peer_last_seen ON peers(last_seen)')
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_reports (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
-        title TEXT NOT NULL, description TEXT NOT NULL, week_start TEXT NOT NULL,
-        week_end TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
+        title TEXT NOT NULL, week_start TEXT NOT NULL, week_end TEXT NOT NULL,
+        created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_projects (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
         report_id TEXT NOT NULL, name TEXT NOT NULL, required INTEGER NOT NULL,
@@ -79,8 +80,20 @@ def check_schema(db):
         row = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
     except sqlite3.OperationalError as exc:
         raise RuntimeError('数据库尚未初始化，请停止旧后端并运行 scripts/migrate_sqlite.py') from exc
-    if row is None or row['value'] != '1':
+    if row is None or row['value'] != SCHEMA_VERSION:
         raise RuntimeError('数据库版本不兼容，请检查迁移状态')
+
+
+def upgrade_schema(db, version):
+    if version == SCHEMA_VERSION:
+        return False
+    if version == '1':
+        columns = {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')}
+        if 'description' in columns:
+            db.execute('ALTER TABLE weekly_reports DROP COLUMN description')
+        db.execute("UPDATE metadata SET value=? WHERE key='schema_version'", (SCHEMA_VERSION,))
+        return True
+    raise RuntimeError('数据库版本不兼容，请检查迁移状态')
 
 
 def encode(table, item):
@@ -155,8 +168,9 @@ def migrate(path, source_dir):
             create_schema(db)
             version = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
             if version:
+                changed = upgrade_schema(db, version['value'])
                 check_schema(db)
-                return False
+                return changed
             records, originals = {}, {}
             for table, filename in SOURCES.items():
                 source = source_dir / filename
@@ -194,7 +208,7 @@ def migrate(path, source_dir):
                     finally:
                         os.close(directory_fd)
             db.executemany('INSERT INTO metadata(key,value) VALUES (?,?)', [
-                ('schema_version', '1'), ('legacy_backup', str(backup.resolve())),
+                ('schema_version', SCHEMA_VERSION), ('legacy_backup', str(backup.resolve())),
                 ('legacy_hashes', json.dumps(manifest)),
             ])
         return True

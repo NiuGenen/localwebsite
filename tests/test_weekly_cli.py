@@ -16,7 +16,6 @@ class WeeklyHandler(BaseHTTPRequestHandler):
     reports = [{
         'id': 'report-1',
         'title': '研发周报',
-        'description': '本周进展',
         'week_start': '2026-09-07',
         'week_end': '2026-09-13',
         'created': 1,
@@ -24,9 +23,9 @@ class WeeklyHandler(BaseHTTPRequestHandler):
     }]
     range_reports = [
         dict(reports[0]),
-        {'id': 'report-late', 'title': '年末周报', 'description': '',
+        {'id': 'report-late', 'title': '年末周报',
          'week_start': '2026-12-28', 'week_end': '2027-01-03', 'created': 3, 'updated': 3},
-        {'id': 'report-early', 'title': '跨月周报', 'description': '',
+        {'id': 'report-early', 'title': '跨月周报',
          'week_start': '2026-07-27', 'week_end': '2026-08-02', 'created': 2, 'updated': 2},
     ]
 
