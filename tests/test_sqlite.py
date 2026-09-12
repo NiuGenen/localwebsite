@@ -182,6 +182,35 @@ class SQLiteTests(unittest.TestCase):
             next_report = client.post('/api/weekly', json={'title': '第 2 周', 'week_start': '2026-09-14', 'week_end': '2026-09-20'}, headers=h)
             self.assertEqual([(p['name'], p['required']) for p in next_report.json['projects']], [('研发', True)])
 
+    def test_weekly_markdown_export_omits_unfilled_sections(self):
+        self.init()
+        with backend.app.test_client() as client:
+            h = {'X-Real-IP': '127.0.0.1'}
+            report = client.post('/api/weekly', json={
+                'title': '周报', 'week_start': '2026-09-07', 'week_end': '2026-09-13'
+            }, headers=h).json
+            for name in ('已填写项目', '空项目'):
+                client.post('/api/weekly/' + report['id'] + '/projects',
+                            json={'name': name, 'required': False}, headers=h)
+            detail = client.get('/api/weekly/' + report['id']).json
+            project_ids = {p['name']: p['id'] for p in detail['projects']}
+            client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '张三',
+                'contents': {project_ids['已填写项目']: '完成内容', project_ids['空项目']: '   '}
+            })
+            client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '李四',
+                'contents': {project_ids['已填写项目']: '', project_ids['空项目']: ''}
+            })
+            for view in ('person', 'project'):
+                exported = client.get('/api/weekly/' + report['id'] + '/export?view=' + view)
+                text = exported.get_data(as_text=True)
+                self.assertEqual(exported.status_code, 200)
+                self.assertIn('完成内容', text)
+                self.assertNotIn('（未填写）', text)
+                self.assertNotIn('空项目', text)
+                self.assertNotIn('李四', text)
+
     def test_threaded_api_adds_and_independent_field_updates(self):
         self.init()
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:

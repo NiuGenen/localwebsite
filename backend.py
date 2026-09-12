@@ -1341,12 +1341,22 @@ def api_weekly_export(report_id):
     by_person = {s["person_name"]: s for s in data["submissions"]}
     if view == "person":
         for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower()):
+            filled = [(p, sub["contents"].get(p["id"], "")) for p in data["projects"]]
+            filled = [(p, value) for p, value in filled if isinstance(value, str) and value.strip()]
+            if not filled:
+                continue
             lines += [f"\n## {name}"]
-            for p in data["projects"]: lines += [f"\n### {p['name']}", sub["contents"].get(p["id"], "") or "（未填写）"]
+            for p, value in filled:
+                lines += [f"\n### {p['name']}", value]
     else:
         for p in data["projects"]:
+            filled = [(name, sub["contents"].get(p["id"], "")) for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower())]
+            filled = [(name, value) for name, value in filled if isinstance(value, str) and value.strip()]
+            if not filled:
+                continue
             lines += [f"\n## {p['name']}"]
-            for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower()): lines += [f"\n### {name}", sub["contents"].get(p["id"], "") or "（未填写）"]
+            for name, value in filled:
+                lines += [f"\n### {name}", value]
     filename = quote(data["title"] + ".md")
     return Response("\n".join(lines) + "\n", mimetype="text/markdown; charset=utf-8", headers={"Content-Disposition": "attachment; filename*=UTF-8''" + filename})
 
