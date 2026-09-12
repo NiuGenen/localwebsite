@@ -135,6 +135,7 @@ section {
 .card-upload   { border-top-color: #2ecc71; }
 .card-reader   { border-top-color: #9b59b6; }
 .card-todo     { border-top-color: #e67e22; }
+.card-weekly   { border-top-color: #2980b9; }
 
 .card-icon {
     font-size: 2rem;
@@ -1462,12 +1463,38 @@ footer {
     border-top-color: #16a085;
 }
 
+.weekly-toolbar { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
+.weekly-section { border-top:3px solid #3498db; padding:1rem 0; }
+.weekly-section h3 { color:#2c3e50; margin-bottom:.75rem; }
+.weekly-section h4 { color:#16a085; margin: .75rem 0 .2rem; }
+.weekly-body { white-space:pre-wrap; background:#f8f9fa; padding:.65rem .8rem; border-radius:6px; }
+.weekly-field { display:block; margin-top:1rem; color:#2c3e50; font-weight:600; }
+.weekly-field textarea { display:block; width:100%; min-height:90px; margin-top:.3rem; padding:.6rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; resize:vertical; }
+.weekly-field span { display:block; }
+.weekly-project-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
+.weekly-project-row::first-line { flex:1; }
+.weekly-project-row .btn:first-of-type { margin-left:auto; }
+.weekly-project-row > span { flex:1; }
+.weekly-default-required { display:block; margin:1rem 0; color:#2c3e50; }
+.weekly-list-row { display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem; }
+.weekly-list-row .page-entry { flex:1; margin-bottom:0; }
+
 .card-pinned p {
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
     overflow: hidden;
+}
+
+/* ===== Homepage local-only cards ===== */
+.local-links {
+    grid-column: 1 / -1;
+}
+.local-links > h3 {
+    margin: 0.5rem 0 1.25rem;
+    color: #2c3e50;
+    font-size: 1.05rem;
 }
 
 /* ===== Homepage custom link cards (自定义网页) ===== */
@@ -2116,6 +2143,3 @@ footer {
         grid-template-columns: 1fr;
     }
 }
-
-
-

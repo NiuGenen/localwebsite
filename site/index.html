@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=22">
+    <link rel="stylesheet" href="/css/style.css?v=23">
 </head>
 <body>
     <header>
@@ -39,30 +39,6 @@
                 <p>浏览、上传并下载共享文件。</p>
                 <a href="/files/" class="btn">进入文件区</a>
             </div>
-            <div class="card card-reader">
-                <div class="card-icon">📝</div>
-                <h3>Markdown 阅读</h3>
-                <p>在线阅读 Markdown 文件，支持表格和代码高亮。</p>
-                <a href="/reader.html" class="btn">开始阅读</a>
-            </div>
-            <div class="card card-todo">
-                <div class="card-icon">✅</div>
-                <h3>待办事项</h3>
-                <p>记录和管理你的待办事项清单。</p>
-                <a href="/todo.html" class="btn">进入待办</a>
-            </div>
-            <div class="card card-pages">
-                <div class="card-icon">📄</div>
-                <h3>自定义页面</h3>
-                <p>将相关的 Markdown 文档组织成独立阅读页面。</p>
-                <a href="/pages.html" class="btn">进入页面</a>
-            </div>
-            <div class="card card-features">
-                <div class="card-icon">🔧</div>
-                <h3>实用功能</h3>
-                <p>记录实用的功能说明与小技巧。</p>
-                <a href="/features.html" class="btn">进入功能</a>
-            </div>
             <div class="card card-peers">
                 <div class="card-icon">🖥️</div>
                 <h3>局域网共享</h3>
@@ -75,13 +51,48 @@
                 <p>拖入 Markdown 文件即时渲染阅读，支持导出独立 HTML 与文档间跳转。</p>
                 <a href="/mdreader.html" class="btn">开始阅读</a>
             </div>
-            <div class="card card-temp">
-                <div class="card-icon">🗒️</div>
-                <h3>临时文本</h3>
-                <p>随手记录临时文本内容，按添加顺序展示。</p>
-                <a href="/temp.html" class="btn">进入</a>
+            <div class="card card-weekly">
+                <div class="card-icon">📅</div>
+                <h3>每周周报</h3>
+                <p>查看和提交每周工作内容，按项目或人员浏览。</p>
+                <a href="/weekly.html" class="btn">进入周报</a>
             </div>
             <div id="pinned-cards"></div>
+            <section class="local-links" id="local-links" aria-labelledby="local-links-title" style="display:none">
+                <h3 id="local-links-title">本机功能</h3>
+                <div class="quick-links">
+                    <div class="card card-reader">
+                        <div class="card-icon">📝</div>
+                        <h3>Markdown 阅读</h3>
+                        <p>在线阅读 Markdown 文件，支持表格和代码高亮。</p>
+                        <a href="/reader.html" class="btn">开始阅读</a>
+                    </div>
+                    <div class="card card-todo">
+                        <div class="card-icon">✅</div>
+                        <h3>待办事项</h3>
+                        <p>记录和管理你的待办事项清单。</p>
+                        <a href="/todo.html" class="btn">进入待办</a>
+                    </div>
+                    <div class="card card-pages">
+                        <div class="card-icon">📄</div>
+                        <h3>自定义页面</h3>
+                        <p>将相关的 Markdown 文档组织成独立阅读页面。</p>
+                        <a href="/pages.html" class="btn">进入页面</a>
+                    </div>
+                    <div class="card card-features">
+                        <div class="card-icon">🔧</div>
+                        <h3>实用功能</h3>
+                        <p>记录实用的功能说明与小技巧。</p>
+                        <a href="/features.html" class="btn">进入功能</a>
+                    </div>
+                    <div class="card card-temp">
+                        <div class="card-icon">🗒️</div>
+                        <h3>临时文本</h3>
+                        <p>随手记录临时文本内容，按添加顺序展示。</p>
+                        <a href="/temp.html" class="btn">进入</a>
+                    </div>
+                </div>
+            </section>
             <div class="homecards-head" id="homecards-head" style="display:none">
                 <h3>自定义网页</h3>
                 <div class="homecards-head-actions">
@@ -116,54 +127,16 @@
     <script src="/js/homecards.js?v=2"></script>
     <script>
     (function () {
-        var card = document.querySelector('.card-reader');
-        if (!card) return;
+        var section = document.getElementById('local-links');
         fetch('/api/local')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.local) card.style.display = 'none';
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json();
             })
-            .catch(function () { card.style.display = 'none'; });
-    })();
-    (function () {
-        var card = document.querySelector('.card-temp');
-        if (!card) return;
-        fetch('/api/local')
-            .then(function (r) { return r.json(); })
             .then(function (d) {
-                if (!d.local) card.style.display = 'none';
+                if (d.local === true) section.style.display = '';
             })
-            .catch(function () { card.style.display = 'none'; });
-    })();
-    (function () {
-        var card = document.querySelector('.card-todo');
-        if (!card) return;
-        fetch('/api/local')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.local) card.style.display = 'none';
-            })
-            .catch(function () { card.style.display = 'none'; });
-    })();
-    (function () {
-        var card = document.querySelector('.card-features');
-        if (!card) return;
-        fetch('/api/local')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.local) card.style.display = 'none';
-            })
-            .catch(function () { card.style.display = 'none'; });
-    })();
-    (function () {
-        var card = document.querySelector('.card-pages');
-        if (!card) return;
-        fetch('/api/local')
-            .then(function (r) { return r.json(); })
-            .then(function (d) {
-                if (!d.local) card.style.display = 'none';
-            })
-            .catch(function () { card.style.display = 'none'; });
+            .catch(function () {});
     })();
     </script>
 </body>

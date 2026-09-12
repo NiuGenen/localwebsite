@@ -22,6 +22,7 @@ COLUMNS = {
 BOOLS = {'done', 'pinned'}
 
 
+
 def connect(path, timeout=5):
     db = sqlite3.connect(str(path), timeout=timeout, isolation_level=None)
     db.row_factory = sqlite3.Row
@@ -50,9 +51,30 @@ def create_schema(db):
                    f'(seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, {fields}, extra TEXT NOT NULL)')
     db.execute('CREATE UNIQUE INDEX IF NOT EXISTS peer_address ON peers(host, port)')
     db.execute('CREATE INDEX IF NOT EXISTS peer_last_seen ON peers(last_seen)')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_reports (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        title TEXT NOT NULL, description TEXT NOT NULL, week_start TEXT NOT NULL,
+        week_end TEXT NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_projects (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        report_id TEXT NOT NULL, name TEXT NOT NULL, required INTEGER NOT NULL,
+        position INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
+        UNIQUE(report_id, name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_submissions (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        report_id TEXT NOT NULL, person_name TEXT NOT NULL, contents TEXT NOT NULL,
+        created INTEGER NOT NULL, updated INTEGER NOT NULL,
+        UNIQUE(report_id, person_name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
+    db.execute('CREATE INDEX IF NOT EXISTS weekly_project_order ON weekly_projects(report_id, position, seq)')
+    db.execute('CREATE INDEX IF NOT EXISTS weekly_submission_report ON weekly_submissions(report_id)')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_default_projects (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL UNIQUE, required INTEGER NOT NULL,
+        position INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
 
 
 def check_schema(db):
+    create_schema(db)
     try:
         row = db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()
     except sqlite3.OperationalError as exc:

@@ -1177,6 +1177,179 @@ def require_local():
         return False
     return True
 
+# ===== 每周周报 API =====
+@app.route("/api/weekly/default-projects", methods=["GET"])
+def api_weekly_default_projects():
+    rows = get_db().execute("SELECT * FROM weekly_default_projects ORDER BY position, seq").fetchall()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/weekly/default-projects", methods=["POST"])
+@db_write
+def api_weekly_default_project_create():
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}; name = (data.get("name") or "").strip()
+    if not name: return jsonify({"error": "项目名称不能为空"}), 400
+    if get_db().execute("SELECT 1 FROM weekly_default_projects WHERE name=?", (name,)).fetchone(): return jsonify({"error": "项目名称已存在"}), 409
+    pos = get_db().execute("SELECT COALESCE(MAX(position),-1)+1 FROM weekly_default_projects").fetchone()[0]; now = int(time.time()); pid = uuid.uuid4().hex[:12]
+    get_db().execute("INSERT INTO weekly_default_projects(id,name,required,position,created,updated) VALUES(?,?,?,?,?,?)", (pid,name,1 if data.get("required") else 0,pos,now,now))
+    return jsonify(dict(get_db().execute("SELECT * FROM weekly_default_projects WHERE id=?",(pid,)).fetchone())), 201
+
+@app.route("/api/weekly/default-projects/<project_id>", methods=["PUT"])
+@db_write
+def api_weekly_default_project_update(project_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    row=get_db().execute("SELECT * FROM weekly_default_projects WHERE id=?",(project_id,)).fetchone()
+    if not row: return jsonify({"error":"默认项目不存在"}),404
+    data=request.get_json() or {}; name=(data.get("name",row["name"]) or "").strip(); pos=int(data.get("position",row["position"]))
+    if not name:return jsonify({"error":"项目名称不能为空"}),400
+    if get_db().execute("SELECT 1 FROM weekly_default_projects WHERE name=? AND id<>?",(name,project_id)).fetchone():return jsonify({"error":"项目名称已存在"}),409
+    get_db().execute("UPDATE weekly_default_projects SET name=?,required=?,position=?,updated=? WHERE id=?",(name,1 if data.get("required",bool(row["required"])) else 0,pos,int(time.time()),project_id))
+    return jsonify(dict(get_db().execute("SELECT * FROM weekly_default_projects WHERE id=?",(project_id,)).fetchone()))
+
+@app.route("/api/weekly/default-projects/<project_id>", methods=["DELETE"])
+@db_write
+def api_weekly_default_project_delete(project_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    if not get_db().execute("DELETE FROM weekly_default_projects WHERE id=?",(project_id,)).rowcount:return jsonify({"error":"默认项目不存在"}),404
+    return jsonify({"success":True})
+
+def weekly_report(row):
+    return dict(row) if row else None
+
+def weekly_detail(report_id):
+    db = get_db()
+    report = weekly_report(db.execute("SELECT * FROM weekly_reports WHERE id=?", (report_id,)).fetchone())
+    if not report:
+        return None
+    projects = [dict(r) for r in db.execute("SELECT * FROM weekly_projects WHERE report_id=? ORDER BY position, seq", (report_id,))]
+    submissions = []
+    for r in db.execute("SELECT * FROM weekly_submissions WHERE report_id=? ORDER BY person_name COLLATE NOCASE, seq", (report_id,)):
+        item = dict(r)
+        item["contents"] = json.loads(item["contents"] or "{}")
+        submissions.append(item)
+    report["projects"] = projects
+    report["submissions"] = submissions
+    return report
+
+@app.route("/api/weekly", methods=["GET"])
+def api_weekly_list():
+    rows = get_db().execute("SELECT * FROM weekly_reports ORDER BY week_start DESC, created DESC, seq DESC").fetchall()
+    return jsonify([weekly_report(r) for r in rows])
+
+@app.route("/api/weekly", methods=["POST"])
+@db_write
+def api_weekly_create():
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    title, desc = (data.get("title") or "").strip(), (data.get("description") or "").strip()
+    start, end = (data.get("week_start") or "").strip(), (data.get("week_end") or "").strip()
+    if not title or not start or not end: return jsonify({"error": "标题、开始日期和结束日期不能为空"}), 400
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', start) or not re.match(r'^\d{4}-\d{2}-\d{2}$', end) or start > end:
+        return jsonify({"error": "日期格式无效或开始日期晚于结束日期"}), 400
+    now = int(time.time()); item = {"id": uuid.uuid4().hex[:12], "title": title, "description": desc, "week_start": start, "week_end": end, "created": now, "updated": now}
+    get_db().execute("INSERT INTO weekly_reports(id,title,description,week_start,week_end,created,updated) VALUES (?,?,?,?,?,?,?)", tuple(item.values()))
+    defaults = get_db().execute("SELECT name,required,position FROM weekly_default_projects ORDER BY position,seq").fetchall()
+    for project in defaults:
+        pid = uuid.uuid4().hex[:12]
+        get_db().execute("INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) VALUES(?,?,?,?,?,?,?)", (pid, item["id"], project["name"], project["required"], project["position"], now, now))
+    return jsonify(weekly_detail(item["id"])), 201
+
+@app.route("/api/weekly/<report_id>", methods=["GET"])
+def api_weekly_detail(report_id):
+    data = weekly_detail(report_id)
+    return jsonify(data) if data else (jsonify({"error": "周报不存在"}), 404)
+
+@app.route("/api/weekly/<report_id>", methods=["PUT"])
+@db_write
+def api_weekly_update(report_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    report = get_db().execute("SELECT * FROM weekly_reports WHERE id=?", (report_id,)).fetchone()
+    if not report: return jsonify({"error": "周报不存在"}), 404
+    data = request.get_json() or {}; title = (data.get("title", report["title"]) or "").strip(); desc = (data.get("description", report["description"]) or "").strip(); start = (data.get("week_start", report["week_start"]) or "").strip(); end = (data.get("week_end", report["week_end"]) or "").strip()
+    if not title or not re.match(r'^\d{4}-\d{2}-\d{2}$', start) or not re.match(r'^\d{4}-\d{2}-\d{2}$', end) or start > end: return jsonify({"error": "标题或日期无效"}), 400
+    get_db().execute("UPDATE weekly_reports SET title=?,description=?,week_start=?,week_end=?,updated=? WHERE id=?", (title, desc, start, end, int(time.time()), report_id))
+    return jsonify(weekly_detail(report_id))
+
+@app.route("/api/weekly/<report_id>", methods=["DELETE"])
+@db_write
+def api_weekly_delete(report_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    if not get_db().execute("DELETE FROM weekly_reports WHERE id=?", (report_id,)).rowcount: return jsonify({"error": "周报不存在"}), 404
+    return jsonify({"success": True})
+
+@app.route("/api/weekly/<report_id>/projects", methods=["POST"])
+@db_write
+def api_weekly_project_create(report_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}; name = (data.get("name") or "").strip()
+    if not name or not get_db().execute("SELECT 1 FROM weekly_reports WHERE id=?", (report_id,)).fetchone(): return jsonify({"error": "周报不存在或项目名称为空"}), 400
+    if get_db().execute("SELECT 1 FROM weekly_projects WHERE report_id=? AND name=?", (report_id, name)).fetchone(): return jsonify({"error": "项目名称已存在"}), 409
+    pos = get_db().execute("SELECT COALESCE(MAX(position),-1)+1 FROM weekly_projects WHERE report_id=?", (report_id,)).fetchone()[0]; now = int(time.time()); pid = uuid.uuid4().hex[:12]
+    get_db().execute("INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) VALUES(?,?,?,?,?,?,?)", (pid, report_id, name, 1 if data.get("required", False) else 0, pos, now, now))
+    return jsonify(weekly_detail(report_id)), 201
+
+@app.route("/api/weekly/<report_id>/projects/<project_id>", methods=["PUT"])
+@db_write
+def api_weekly_project_update(report_id, project_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    row = get_db().execute("SELECT * FROM weekly_projects WHERE id=? AND report_id=?", (project_id, report_id)).fetchone()
+    if not row: return jsonify({"error": "项目不存在"}), 404
+    data = request.get_json() or {}; name = (data.get("name", row["name"]) or "").strip(); required = 1 if data.get("required", bool(row["required"])) else 0
+    if not name: return jsonify({"error": "项目名称不能为空"}), 400
+    if get_db().execute("SELECT 1 FROM weekly_projects WHERE report_id=? AND name=? AND id<>?", (report_id, name, project_id)).fetchone(): return jsonify({"error": "项目名称已存在"}), 409
+    pos = int(data.get("position", row["position"])); now = int(time.time()); get_db().execute("UPDATE weekly_projects SET name=?,required=?,position=?,updated=? WHERE id=?", (name, required, pos, now, project_id)); return jsonify(weekly_detail(report_id))
+
+@app.route("/api/weekly/<report_id>/projects/<project_id>", methods=["DELETE"])
+@db_write
+def api_weekly_project_delete(report_id, project_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    if not get_db().execute("DELETE FROM weekly_projects WHERE id=? AND report_id=?", (project_id, report_id)).rowcount: return jsonify({"error": "项目不存在"}), 404
+    rows = get_db().execute("SELECT id,contents FROM weekly_submissions WHERE report_id=?", (report_id,)).fetchall()
+    for row in rows:
+        contents = json.loads(row["contents"] or "{}"); contents.pop(project_id, None); get_db().execute("UPDATE weekly_submissions SET contents=?,updated=? WHERE id=?", (json.dumps(contents, ensure_ascii=False), int(time.time()), row["id"]))
+    return jsonify(weekly_detail(report_id))
+
+@app.route("/api/weekly/<report_id>/submissions", methods=["GET"])
+def api_weekly_submissions(report_id):
+    data = weekly_detail(report_id)
+    if not data: return jsonify({"error": "周报不存在"}), 404
+    return jsonify(data["submissions"])
+
+@app.route("/api/weekly/<report_id>/submissions", methods=["POST"])
+@db_write
+def api_weekly_submission_save(report_id):
+    report = weekly_detail(report_id)
+    if not report: return jsonify({"error": "周报不存在"}), 404
+    data = request.get_json() or {}; name = re.sub(r'\s+', ' ', (data.get("person_name") or "").strip()); contents = data.get("contents") or {}
+    if not name or len(name) > 100: return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    allowed = {p["id"]: p for p in report["projects"]}
+    if not isinstance(contents, dict): return jsonify({"error": "项目内容格式无效"}), 400
+    for pid, project in allowed.items():
+        value = contents.get(pid, "")
+        if not isinstance(value, str): return jsonify({"error": "项目内容格式无效"}), 400
+        if project["required"] and not value.strip(): return jsonify({"error": "请填写必填项目：" + project["name"]}), 400
+    contents = {pid: contents.get(pid, "") for pid in allowed}; now = int(time.time()); old = get_db().execute("SELECT id,created FROM weekly_submissions WHERE report_id=? AND person_name=?", (report_id, name)).fetchone()
+    if old: get_db().execute("UPDATE weekly_submissions SET contents=?,updated=? WHERE id=?", (json.dumps(contents, ensure_ascii=False), now, old["id"])); sid = old["id"]; created = old["created"]
+    else: sid = uuid.uuid4().hex; created = now; get_db().execute("INSERT INTO weekly_submissions(id,report_id,person_name,contents,created,updated) VALUES(?,?,?,?,?,?)", (sid, report_id, name, json.dumps(contents, ensure_ascii=False), created, now))
+    return jsonify(next(s for s in weekly_detail(report_id)["submissions"] if s["id"] == sid))
+
+@app.route("/api/weekly/<report_id>/export")
+def api_weekly_export(report_id):
+    data = weekly_detail(report_id)
+    if not data: return jsonify({"error": "周报不存在"}), 404
+    view = request.args.get("view", "project"); lines = [f"# {data['title']}", f"\n时间：{data['week_start']} 至 {data['week_end']}"]
+    by_person = {s["person_name"]: s for s in data["submissions"]}
+    if view == "person":
+        for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower()):
+            lines += [f"\n## {name}"]
+            for p in data["projects"]: lines += [f"\n### {p['name']}", sub["contents"].get(p["id"], "") or "（未填写）"]
+    else:
+        for p in data["projects"]:
+            lines += [f"\n## {p['name']}"]
+            for name, sub in sorted(by_person.items(), key=lambda x: x[0].lower()): lines += [f"\n### {name}", sub["contents"].get(p["id"], "") or "（未填写）"]
+    filename = quote(data["title"] + ".md")
+    return Response("\n".join(lines) + "\n", mimetype="text/markdown; charset=utf-8", headers={"Content-Disposition": "attachment; filename*=UTF-8''" + filename})
+
 @app.route("/api/pages", methods=["GET"])
 def api_pages_list():
     pages = load_pages()

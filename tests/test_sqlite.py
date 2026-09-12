@@ -168,6 +168,20 @@ class SQLiteTests(unittest.TestCase):
                 self.assertEqual(self.records(table), [])
         # Read restrictions on todo/features/temp are enforced by Nginx.
 
+    def test_weekly_defaults_are_copied_only_when_report_is_created(self):
+        self.init()
+        with backend.app.test_client() as client:
+            h = {'X-Real-IP': '127.0.0.1'}
+            default = client.post('/api/weekly/default-projects', json={'name': '研发', 'required': True}, headers=h)
+            self.assertEqual(default.status_code, 201)
+            report = client.post('/api/weekly', json={'title': '第 1 周', 'week_start': '2026-09-07', 'week_end': '2026-09-13'}, headers=h)
+            self.assertEqual(report.status_code, 201)
+            self.assertEqual([(p['name'], p['required']) for p in report.json['projects']], [('研发', True)])
+            changed = client.put('/api/weekly/' + report.json['id'] + '/projects/' + report.json['projects'][0]['id'], json={'name': '研发（本周）', 'required': False, 'position': 0}, headers=h)
+            self.assertEqual(changed.status_code, 200)
+            next_report = client.post('/api/weekly', json={'title': '第 2 周', 'week_start': '2026-09-14', 'week_end': '2026-09-20'}, headers=h)
+            self.assertEqual([(p['name'], p['required']) for p in next_report.json['projects']], [('研发', True)])
+
     def test_threaded_api_adds_and_independent_field_updates(self):
         self.init()
         with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
