@@ -1506,6 +1506,8 @@ footer {
 .weekly-project-row::first-line { flex:1; }
 .weekly-project-row .btn:first-of-type { margin-left:auto; }
 .weekly-project-row > span { flex:1; }
+.weekly-person-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
+.weekly-person-row > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
 .weekly-default-required { display:block; margin:1rem 0; color:#2c3e50; }
 .weekly-list-row { display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem; }
 .weekly-list-row .page-entry { flex:1; margin-bottom:0; text-decoration:none; }

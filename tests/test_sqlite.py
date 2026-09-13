@@ -291,6 +291,77 @@ class SQLiteTests(unittest.TestCase):
             self.assertEqual(deleted.status_code, 200)
             self.assertEqual(deleted.json['submissions'][0]['revision'], 3)
 
+    def test_local_weekly_person_management_renames_and_deletes_submission(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            remote = {'X-Real-IP': '192.0.2.1'}
+            report = client.post('/api/weekly', json={
+                'title': '人员管理', 'week_start': '2026-09-07', 'week_end': '2026-09-13'
+            }, headers=local).json
+            detail = client.post('/api/weekly/' + report['id'] + '/projects', json={
+                'name': '研发', 'required': False
+            }, headers=local).json
+            project_id = detail['projects'][0]['id']
+            first = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '张三', 'contents': {project_id: '保留的内容'}
+            }).json
+            second = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '李四', 'contents': {project_id: '其他内容'}
+            }).json
+            path = '/api/weekly/' + report['id'] + '/submissions/' + first['id']
+
+            denied = client.put(path, json={
+                'person_name': '王五', 'expected_revision': first['revision']
+            }, headers=remote)
+            self.assertEqual(denied.status_code, 403)
+            denied = client.delete(path, json={
+                'expected_revision': first['revision']
+            }, headers=remote)
+            self.assertEqual(denied.status_code, 403)
+
+            renamed = client.put(path, json={
+                'person_name': ' 王   五 ', 'expected_revision': first['revision']
+            }, headers=local)
+            self.assertEqual(renamed.status_code, 200, renamed.json)
+            self.assertEqual(renamed.json['person_name'], '王 五')
+            self.assertEqual(renamed.json['contents'][project_id], '保留的内容')
+            self.assertEqual(renamed.json['revision'], 2)
+
+            duplicate = client.put(path, json={
+                'person_name': second['person_name'], 'expected_revision': 2
+            }, headers=local)
+            self.assertEqual(duplicate.status_code, 409)
+            empty = client.put(path, json={
+                'person_name': ' ', 'expected_revision': 2
+            }, headers=local)
+            self.assertEqual(empty.status_code, 400)
+            stale = client.put(path, json={
+                'person_name': '过期名称', 'expected_revision': 1
+            }, headers=local)
+            self.assertEqual(stale.status_code, 409)
+            self.assertEqual(stale.json['code'], 'revision_conflict')
+            stale_delete = client.delete(path, json={
+                'expected_revision': 1
+            }, headers=local)
+            self.assertEqual(stale_delete.status_code, 409)
+            self.assertEqual(stale_delete.json['code'], 'revision_conflict')
+
+            removed = client.delete(path, json={
+                'expected_revision': 2
+            }, headers=local)
+            self.assertEqual(removed.status_code, 200)
+            self.assertEqual(client.get('/api/weekly/' + report['id'] + '/people').json, ['李四'])
+            current = client.get('/api/weekly/' + report['id']).json
+            self.assertEqual([item['person_name'] for item in current['submissions']], ['李四'])
+            self.assertEqual(client.get('/api/weekly?limit=1').json[0]['submission_count'], 1)
+            exported = client.get('/api/weekly/' + report['id'] + '/export').get_data(as_text=True)
+            self.assertNotIn('王 五', exported)
+            self.assertNotIn('保留的内容', exported)
+            self.assertEqual(client.delete(path, json={
+                'expected_revision': 2
+            }, headers=local).status_code, 404)
+
     def test_weekly_markdown_export_omits_unfilled_sections(self):
         self.init()
         with backend.app.test_client() as client:

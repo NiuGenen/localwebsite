@@ -264,6 +264,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | POST | `/api/weekly/<id>/projects` | 添加周报项目（仅本机） |
 | PUT / DELETE | `/api/weekly/<id>/projects/<project_id>` | 修改或删除项目（仅本机） |
 | GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 新增或按版本修改人员提交（开放） |
+| PUT / DELETE | `/api/weekly/<id>/submissions/<submission_id>` | 修改人员名称 / 删除人员全部周报内容（仅本机，需 `expected_revision`） |
 | GET | `/api/weekly/<id>/export?view=project\|person&person=姓名` | 导出 Markdown，可选仅导出指定人员（开放） |
 | POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |
 | POST | `/api/peers/unregister` | 节点主动下线通知（开放，校验 `PEER_SECRET`，按 `host+port` 移除） |

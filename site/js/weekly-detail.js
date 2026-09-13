@@ -11,6 +11,11 @@
     var submitHint = document.getElementById('submit-hint');
     var editingSubmissionId = null;
     var editingRevision = null;
+    var managedSubmission = null;
+    var personAdminModal = document.getElementById('person-admin-modal');
+    var personAdminName = document.getElementById('person-admin-name');
+    var personAdminHint = document.getElementById('person-admin-hint');
+    var personAdminSave = document.getElementById('person-admin-save');
 
     function clearSubmitHint() {
         submitHint.textContent = '';
@@ -37,6 +42,73 @@
             document.getElementById('report-meta').textContent = result.week_start + ' 至 ' + result.week_end;
             render();
             renderProjects();
+            renderPeople();
+        });
+    }
+
+    function showPeopleError(message) {
+        var hint = document.getElementById('people-admin-hint');
+        hint.textContent = message;
+        hint.className = 'fb-modal-hint fb-modal-hint-err';
+        hint.setAttribute('role', 'alert');
+    }
+
+    function renderPeople() {
+        var box = document.getElementById('people');
+        var empty = document.getElementById('people-empty');
+        if (!box || !data) return;
+        box.innerHTML = '';
+        document.getElementById('people-admin-hint').textContent = '';
+        empty.style.display = data.submissions.length ? 'none' : '';
+        data.submissions.forEach(function (submission) {
+            var row = document.createElement('div');
+            row.className = 'weekly-person-row';
+            var label = document.createElement('span');
+            label.textContent = submission.person_name;
+            var edit = document.createElement('button');
+            edit.className = 'btn btn-sm';
+            edit.textContent = '编辑';
+            edit.onclick = function () {
+                managedSubmission = submission;
+                personAdminName.value = submission.person_name;
+                personAdminHint.textContent = '';
+                personAdminHint.className = 'fb-modal-hint';
+                personAdminModal.style.display = 'flex';
+                personAdminName.focus();
+                personAdminName.select();
+            };
+            var remove = document.createElement('button');
+            remove.className = 'btn btn-sm btn-danger';
+            remove.textContent = '删除';
+            remove.onclick = function () {
+                if (!confirm('删除人员“' + submission.person_name + '”？该人员在本周报中的所有内容都会被删除，且不可恢复。')) return;
+                remove.disabled = true;
+                fetch('/api/weekly/' + id + '/submissions/' + submission.id, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ expected_revision: submission.revision })
+                }).then(function (response) {
+                    return response.json().then(function (result) {
+                        return { status: response.status, result: result };
+                    });
+                }).then(function (outcome) {
+                    if (outcome.result.error) {
+                        if (outcome.result.code === 'revision_conflict') {
+                            load().then(function () { showPeopleError(outcome.result.error); });
+                        } else {
+                            showPeopleError(outcome.result.error);
+                        }
+                        return;
+                    }
+                    load();
+                }).catch(function () {
+                    showPeopleError('删除失败，请稍后重试');
+                }).finally(function () {
+                    remove.disabled = false;
+                });
+            };
+            row.append(label, edit, remove);
+            box.appendChild(row);
         });
     }
 
@@ -212,6 +284,51 @@
         }
     };
     document.getElementById('submit-cancel').onclick = function () { modal.style.display = 'none'; };
+    document.getElementById('person-admin-cancel').onclick = function () {
+        personAdminModal.style.display = 'none';
+    };
+    personAdminSave.onclick = function () {
+        var name = personAdminName.value.trim();
+        if (!name) {
+            personAdminHint.textContent = '人员名称不能为空';
+            personAdminHint.className = 'fb-modal-hint fb-modal-hint-err';
+            return;
+        }
+        personAdminSave.disabled = true;
+        fetch('/api/weekly/' + id + '/submissions/' + managedSubmission.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                person_name: name,
+                expected_revision: managedSubmission.revision
+            })
+        }).then(function (response) {
+            return response.json().then(function (result) {
+                return { status: response.status, result: result };
+            });
+        }).then(function (outcome) {
+            if (outcome.result.error) {
+                if (outcome.result.code === 'revision_conflict') {
+                    personAdminModal.style.display = 'none';
+                    load().then(function () { showPeopleError(outcome.result.error); });
+                    return;
+                }
+                personAdminHint.textContent = outcome.result.error;
+                personAdminHint.className = outcome.status === 409
+                    ? 'fb-modal-hint weekly-conflict-hint'
+                    : 'fb-modal-hint fb-modal-hint-err';
+                personAdminHint.setAttribute('role', 'alert');
+                return;
+            }
+            personAdminModal.style.display = 'none';
+            load();
+        }).catch(function () {
+            personAdminHint.textContent = '保存失败，请稍后重试';
+            personAdminHint.className = 'fb-modal-hint fb-modal-hint-err';
+        }).finally(function () {
+            personAdminSave.disabled = false;
+        });
+    };
     submitSave.onclick = function () {
         var contents = {};
         fields.querySelectorAll('textarea').forEach(function (textarea) {
@@ -255,7 +372,7 @@
         return response.json();
     }).then(function (result) {
         if (result.local) {
-            document.getElementById('project-admin').style.display = '';
+            document.getElementById('local-admin').style.display = '';
             document.getElementById('add-project').onclick = function () {
                 var name = prompt('项目名称');
                 if (name) {

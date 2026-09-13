@@ -1536,6 +1536,73 @@ def api_weekly_submission_save(report_id):
         get_db().execute("INSERT INTO weekly_submissions(id,report_id,person_name,contents,revision,created,updated) VALUES(?,?,?,?,?,?,?)", (sid, report_id, name, encoded, 1, now, now))
     return jsonify(next(s for s in weekly_detail(report_id)["submissions"] if s["id"] == sid))
 
+
+@app.route("/api/weekly/<report_id>/submissions/<submission_id>", methods=["PUT"])
+@db_write
+def api_weekly_submission_rename(report_id, submission_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json() or {}
+    name = re.sub(r'\s+', ' ', (data.get("person_name") or "").strip())
+    revision = data.get("expected_revision")
+    if not name or len(name) > 100:
+        return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    if type(revision) is not int or revision < 1:
+        return jsonify({"error": "提交版本无效，请重新加载后再保存"}), 409
+    submission = get_db().execute(
+        "SELECT id FROM weekly_submissions WHERE id=? AND report_id=?",
+        (submission_id, report_id),
+    ).fetchone()
+    if not submission:
+        return jsonify({"error": "人员提交不存在"}), 404
+    duplicate = get_db().execute(
+        "SELECT 1 FROM weekly_submissions WHERE report_id=? AND person_name=? AND id<>?",
+        (report_id, name, submission_id),
+    ).fetchone()
+    if duplicate:
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    changed = get_db().execute(
+        "UPDATE weekly_submissions SET person_name=?,revision=revision+1,updated=? "
+        "WHERE id=? AND report_id=? AND revision=?",
+        (name, int(time.time()), submission_id, report_id, revision),
+    ).rowcount
+    if not changed:
+        return jsonify({
+            "error": "该人员的周报已被其他人修改，请重新加载后再保存",
+            "code": "revision_conflict",
+        }), 409
+    return jsonify(next(
+        item for item in weekly_detail(report_id)["submissions"]
+        if item["id"] == submission_id
+    ))
+
+
+@app.route("/api/weekly/<report_id>/submissions/<submission_id>", methods=["DELETE"])
+@db_write
+def api_weekly_submission_delete(report_id, submission_id):
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json(silent=True) or {}
+    revision = data.get("expected_revision")
+    if type(revision) is not int or revision < 1:
+        return jsonify({"error": "提交版本无效，请重新加载后再删除"}), 409
+    submission = get_db().execute(
+        "SELECT id FROM weekly_submissions WHERE id=? AND report_id=?",
+        (submission_id, report_id),
+    ).fetchone()
+    if not submission:
+        return jsonify({"error": "人员提交不存在"}), 404
+    changed = get_db().execute(
+        "DELETE FROM weekly_submissions WHERE id=? AND report_id=? AND revision=?",
+        (submission_id, report_id, revision),
+    ).rowcount
+    if not changed:
+        return jsonify({
+            "error": "该人员的周报已被其他人修改，请重新加载后再删除",
+            "code": "revision_conflict",
+        }), 409
+    return jsonify({"success": True})
+
 @app.route("/api/weekly/<report_id>/export")
 def api_weekly_export(report_id):
     data = weekly_detail(report_id)
