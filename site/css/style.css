@@ -1481,8 +1481,13 @@ footer {
 .weekly-section h4 { color:#16a085; margin: .75rem 0 .2rem; }
 .weekly-body { white-space:pre-wrap; background:#f8f9fa; padding:.65rem .8rem; border-radius:6px; }
 .weekly-field { display:block; margin-top:1rem; color:#2c3e50; font-weight:600; }
-.weekly-field textarea { display:block; width:100%; min-height:90px; margin-top:.3rem; padding:.6rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; resize:vertical; }
-.weekly-field span { display:block; }
+.weekly-field-head { display:flex; align-items:center; gap:.75rem; min-height:2rem; }
+.weekly-field-head label { flex:1; min-width:0; }
+.weekly-field-status { flex-shrink:0; color:#27ae60; font-size:.85rem; font-weight:600; white-space:nowrap; }
+.weekly-field-status[hidden] { display:none; }
+.weekly-field-toggle { flex-shrink:0; }
+.weekly-field-editor[hidden] { display:none; }
+.weekly-field textarea { display:block; box-sizing:border-box; width:100%; min-height:90px; margin-top:.3rem; padding:.6rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; resize:vertical; }
 .weekly-conflict-hint { padding:.65rem .75rem; border:1px solid #e74c3c; border-radius:5px; background:#fdf0ee; color:#c0392b; font-weight:600; line-height:1.5; }
 .weekly-project-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
 .weekly-project-row::first-line { flex:1; }

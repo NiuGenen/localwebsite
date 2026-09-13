@@ -137,13 +137,52 @@
         nameEl.value = submission ? submission.person_name : '';
         clearSubmitHint();
         data.projects.forEach(function (project) {
+            var value = submission ? (submission.contents[project.id] || '') : '';
+            var expanded = project.required || Boolean(value.trim());
+            var field = document.createElement('div');
+            field.className = 'weekly-field';
+            var heading = document.createElement('div');
+            heading.className = 'weekly-field-head';
             var label = document.createElement('label');
-            label.className = 'weekly-field';
-            label.innerHTML = '<span></span><textarea></textarea>';
-            label.firstChild.textContent = project.name + (project.required ? '（必填）' : '');
-            label.lastChild.value = submission ? (submission.contents[project.id] || '') : '';
-            label.lastChild.dataset.id = project.id;
-            fields.appendChild(label);
+            var textarea = document.createElement('textarea');
+            var editor = document.createElement('div');
+            var textareaId = 'weekly-project-' + project.id;
+            label.htmlFor = textareaId;
+            label.textContent = project.name + (project.required ? '（必填）' : '');
+            textarea.id = textareaId;
+            textarea.value = value;
+            textarea.dataset.id = project.id;
+            editor.className = 'weekly-field-editor';
+            editor.hidden = !expanded;
+            heading.appendChild(label);
+            if (!project.required) {
+                var status = document.createElement('span');
+                var toggle = document.createElement('button');
+                status.className = 'weekly-field-status';
+                status.textContent = '（已填写）';
+                toggle.type = 'button';
+                toggle.className = 'btn btn-sm weekly-field-toggle';
+                toggle.textContent = expanded ? '收起' : '填写';
+                toggle.setAttribute('aria-controls', textareaId);
+                toggle.setAttribute('aria-expanded', String(expanded));
+                var updateStatus = function () {
+                    status.hidden = !editor.hidden || !textarea.value.trim();
+                };
+                toggle.onclick = function () {
+                    var willExpand = editor.hidden;
+                    editor.hidden = !willExpand;
+                    toggle.textContent = willExpand ? '收起' : '填写';
+                    toggle.setAttribute('aria-expanded', String(willExpand));
+                    updateStatus();
+                    if (willExpand) textarea.focus();
+                };
+                textarea.addEventListener('input', updateStatus);
+                updateStatus();
+                heading.append(status, toggle);
+            }
+            editor.appendChild(textarea);
+            field.append(heading, editor);
+            fields.appendChild(field);
         });
         modal.style.display = 'flex';
         nameEl.focus();
