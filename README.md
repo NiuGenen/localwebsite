@@ -256,6 +256,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | GET / POST | `/api/links` | 首页自定义网页卡片列表（开放）/ 添加（仅本机） |
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
 | GET / POST | `/api/weekly?limit=N` | 周报列表（开放；GET 可用正整数 `limit` 限制数量，省略则返回全部）/ 创建周报（仅本机） |
+| POST | `/api/weekly/import` | 从默认按项目布局的 Markdown 文件创建周报（仅本机，multipart 字段 `file`） |
 | GET | `/api/weekly/<id>/people` | 指定周报的已提交人员名称列表（开放） |
 | GET / POST | `/api/weekly/default-projects` | 默认项目列表（开放）/ 添加默认项目（仅本机） |
 | PUT / DELETE | `/api/weekly/default-projects/<project_id>` | 修改或删除默认项目（仅本机） |

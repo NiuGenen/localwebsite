@@ -32,6 +32,7 @@ MAX_ZIP_SIZE = 1 * 1024 * 1024 * 1024  # 文件夹打包下载的大小上限（
 TMP_DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp_docs")
 DOC_READ_EXTS = {".doc", ".docx"}
 MAX_DOC_BYTES = 50 * 1024 * 1024  # 单个文档转换/提取上限（50MB）
+MAX_WEEKLY_IMPORT_BYTES = 5 * 1024 * 1024
 
 # ===== 待办事项取值 =====
 PRIORITIES = ("high", "medium", "low")
@@ -1178,6 +1179,83 @@ def require_local():
     return True
 
 # ===== 每周周报 API =====
+def parse_weekly_markdown(text):
+    lines = text.splitlines()
+    index = 0
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    if index >= len(lines) or not re.fullmatch(r'# [^#].*', lines[index].strip()):
+        raise ValueError('缺少周报标题，第一行应为“# 周报标题”')
+    title = lines[index].strip()[2:].strip()
+    if not title or len(title) > 200:
+        raise ValueError('周报标题不能为空且不能超过 200 个字符')
+
+    index += 1
+    while index < len(lines) and not lines[index].strip():
+        index += 1
+    if index >= len(lines):
+        raise ValueError('缺少周报时间范围')
+    match = re.fullmatch(
+        r'时间：(\d{4}-\d{2}-\d{2})\s+至\s+(\d{4}-\d{2}-\d{2})',
+        lines[index].strip(),
+    )
+    if not match or match.group(1) > match.group(2):
+        raise ValueError('时间范围格式无效，应为“时间：YYYY-MM-DD 至 YYYY-MM-DD”')
+
+    projects = []
+    project_names = set()
+    people = []
+    people_seen = set()
+    current_project = None
+    current_person = None
+    content_lines = []
+
+    def finish_person():
+        nonlocal current_person, content_lines
+        if current_person is None:
+            return
+        current_project['contents'][current_person] = '\n'.join(content_lines).strip()
+        current_person = None
+        content_lines = []
+
+    for line in lines[index + 1:]:
+        if line.startswith('## '):
+            finish_person()
+            name = line[3:].strip()
+            if not name or len(name) > 100:
+                raise ValueError('项目名称不能为空且不能超过 100 个字符')
+            if name in project_names:
+                raise ValueError('项目重复：' + name)
+            current_project = {'name': name, 'contents': {}}
+            projects.append(current_project)
+            project_names.add(name)
+        elif line.startswith('### '):
+            if current_project is None:
+                raise ValueError('人员标题必须位于项目标题之后')
+            finish_person()
+            name = re.sub(r'\s+', ' ', line[4:].strip())
+            if not name or len(name) > 100:
+                raise ValueError('人员名称不能为空且不能超过 100 个字符')
+            if name in current_project['contents']:
+                raise ValueError('项目“' + current_project['name'] + '”中的人员重复：' + name)
+            current_person = name
+            if name not in people_seen:
+                people.append(name)
+                people_seen.add(name)
+        elif current_person is not None:
+            content_lines.append(line)
+        elif line.strip():
+            raise ValueError('项目内容必须位于人员标题之后')
+    finish_person()
+    return {
+        'title': title,
+        'week_start': match.group(1),
+        'week_end': match.group(2),
+        'projects': projects,
+        'people': people,
+    }
+
+
 @app.route("/api/weekly/default-projects", methods=["GET"])
 def api_weekly_default_projects():
     rows = get_db().execute("SELECT * FROM weekly_default_projects ORDER BY position, seq").fetchall()
@@ -1268,6 +1346,89 @@ def api_weekly_create():
         pid = uuid.uuid4().hex[:12]
         get_db().execute("INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) VALUES(?,?,?,?,?,?,?)", (pid, item["id"], project["name"], project["required"], project["position"], now, now))
     return jsonify(weekly_detail(item["id"])), 201
+
+
+@app.route("/api/weekly/import", methods=["POST"])
+def api_weekly_import():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    upload = request.files.get("file")
+    if not upload or not upload.filename:
+        return jsonify({"error": "请选择 Markdown 文件"}), 400
+    if os.path.splitext(upload.filename)[1].lower() != ".md":
+        return jsonify({"error": "仅支持 .md 文件"}), 400
+    raw = upload.stream.read(MAX_WEEKLY_IMPORT_BYTES + 1)
+    if len(raw) > MAX_WEEKLY_IMPORT_BYTES:
+        return jsonify({"error": "Markdown 文件不能超过 5 MiB"}), 413
+    try:
+        imported = parse_weekly_markdown(raw.decode("utf-8-sig"))
+    except UnicodeDecodeError:
+        return jsonify({"error": "Markdown 文件必须使用 UTF-8 编码"}), 400
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+    db = get_db()
+    with storage.transaction(db):
+        duplicate = db.execute(
+            "SELECT 1 FROM weekly_reports WHERE title=? AND week_start=? AND week_end=?",
+            (imported["title"], imported["week_start"], imported["week_end"]),
+        ).fetchone()
+        if duplicate:
+            return jsonify({"error": "已存在标题和时间范围相同的周报"}), 409
+
+        now = int(time.time())
+        report_id = uuid.uuid4().hex[:12]
+        db.execute(
+            "INSERT INTO weekly_reports(id,title,week_start,week_end,created,updated) "
+            "VALUES(?,?,?,?,?,?)",
+            (report_id, imported["title"], imported["week_start"],
+             imported["week_end"], now, now),
+        )
+        projects = {}
+        max_position = -1
+        defaults = db.execute(
+            "SELECT name,required,position FROM weekly_default_projects ORDER BY position,seq"
+        ).fetchall()
+        for default in defaults:
+            project_id = uuid.uuid4().hex[:12]
+            max_position = max(max_position, default["position"])
+            db.execute(
+                "INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (project_id, report_id, default["name"], default["required"],
+                 default["position"], now, now),
+            )
+            projects[default["name"]] = {
+                "id": project_id, "required": bool(default["required"]),
+            }
+        for imported_project in imported["projects"]:
+            if imported_project["name"] in projects:
+                continue
+            max_position += 1
+            project_id = uuid.uuid4().hex[:12]
+            db.execute(
+                "INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (project_id, report_id, imported_project["name"], 0,
+                 max_position, now, now),
+            )
+            projects[imported_project["name"]] = {"id": project_id, "required": False}
+
+        imported_by_project = {project["name"]: project for project in imported["projects"]}
+        for person in imported["people"]:
+            contents = {}
+            for project_name, project in projects.items():
+                value = imported_by_project.get(project_name, {}).get("contents", {}).get(person, "")
+                contents[project["id"]] = value if value.strip() else ("无" if project["required"] else "")
+            submission_id = uuid.uuid4().hex
+            db.execute(
+                "INSERT INTO weekly_submissions"
+                "(id,report_id,person_name,contents,revision,created,updated) "
+                "VALUES(?,?,?,?,?,?,?)",
+                (submission_id, report_id, person,
+                 json.dumps(contents, ensure_ascii=False), 1, now, now),
+            )
+    return jsonify(weekly_detail(report_id)), 201
 
 @app.route("/api/weekly/<report_id>", methods=["GET"])
 def api_weekly_detail(report_id):

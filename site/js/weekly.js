@@ -3,6 +3,11 @@
     var empty = document.getElementById('weekly-empty');
     var create = document.getElementById('weekly-create');
     var defaults = document.getElementById('weekly-defaults');
+    var importButton = document.getElementById('weekly-import');
+    var importModal = document.getElementById('weekly-import-modal');
+    var importFile = document.getElementById('weekly-import-file');
+    var importHint = document.getElementById('weekly-import-hint');
+    var importSave = document.getElementById('weekly-import-save');
     var modal = document.getElementById('weekly-modal');
     var head = document.getElementById('weekly-modal-head');
     var title = document.getElementById('weekly-title');
@@ -123,6 +128,41 @@
     }
 
     create.onclick = openCreate;
+    importButton.onclick = function () {
+        importFile.value = '';
+        importHint.textContent = '';
+        importHint.className = 'fb-modal-hint';
+        importModal.style.display = 'flex';
+        importFile.focus();
+    };
+    document.getElementById('weekly-import-cancel').onclick = function () {
+        importModal.style.display = 'none';
+    };
+    importSave.onclick = function () {
+        if (!importFile.files.length) {
+            importHint.textContent = '请选择 Markdown 文件';
+            importHint.className = 'fb-modal-hint fb-modal-hint-err';
+            return;
+        }
+        var body = new FormData();
+        body.append('file', importFile.files[0]);
+        importSave.disabled = true;
+        fetch('/api/weekly/import', { method: 'POST', body: body }).then(function (response) {
+            return response.json();
+        }).then(function (result) {
+            if (result.error) {
+                importHint.textContent = result.error;
+                importHint.className = 'fb-modal-hint fb-modal-hint-err';
+                return;
+            }
+            location.href = '/weekly-detail.html?id=' + encodeURIComponent(result.id);
+        }).catch(function () {
+            importHint.textContent = '导入失败，请稍后重试';
+            importHint.className = 'fb-modal-hint fb-modal-hint-err';
+        }).finally(function () {
+            importSave.disabled = false;
+        });
+    };
     previousPage.onclick = function () {
         if (currentPage > 0) {
             currentPage--;
@@ -165,6 +205,7 @@
         if (result.local) {
             create.style.display = '';
             defaults.style.display = '';
+            importButton.style.display = '';
         }
         load();
     }).catch(load);

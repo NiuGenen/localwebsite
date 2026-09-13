@@ -1,4 +1,5 @@
 import concurrent.futures
+import io
 import json
 import multiprocessing
 from pathlib import Path
@@ -329,6 +330,128 @@ class SQLiteTests(unittest.TestCase):
             self.assertEqual(missing.status_code, 404)
             self.assertEqual(missing.json['error'], '人员不存在：王五')
             self.assertEqual(client.get('/api/weekly/' + report['id'] + '/export?person=').status_code, 400)
+
+    def test_weekly_markdown_import_applies_defaults_and_fills_required_projects(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            remote = {'X-Real-IP': '192.0.2.1'}
+            client.post('/api/weekly/default-projects',
+                        json={'name': '研发', 'required': True}, headers=local)
+            client.post('/api/weekly/default-projects',
+                        json={'name': '例行事项', 'required': False}, headers=local)
+            markdown = '''# 导入周报
+
+时间：2026-09-14 至 2026-09-20
+
+## 研发
+
+### 张三
+完成核心功能
+
+## 临时项目
+
+### 张三
+处理临时任务
+
+### 李四
+协助验证
+'''
+            denied = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(markdown.encode()), 'weekly.md')
+            }, headers=remote, content_type='multipart/form-data')
+            self.assertEqual(denied.status_code, 403)
+
+            response = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(('\ufeff' + markdown).encode()), 'weekly.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(response.status_code, 201, response.json)
+            report = response.json
+            self.assertEqual(report['title'], '导入周报')
+            self.assertEqual(
+                [(project['name'], bool(project['required'])) for project in report['projects']],
+                [('研发', True), ('例行事项', False), ('临时项目', False)],
+            )
+            project_ids = {project['name']: project['id'] for project in report['projects']}
+            submissions = {item['person_name']: item for item in report['submissions']}
+            self.assertEqual(set(submissions), {'张三', '李四'})
+            self.assertEqual(submissions['张三']['contents'][project_ids['研发']], '完成核心功能')
+            self.assertEqual(submissions['张三']['contents'][project_ids['临时项目']], '处理临时任务')
+            self.assertEqual(submissions['张三']['contents'][project_ids['例行事项']], '')
+            self.assertEqual(submissions['李四']['contents'][project_ids['研发']], '无')
+            self.assertEqual(submissions['李四']['revision'], 1)
+
+            duplicate = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(markdown.encode()), 'weekly.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(duplicate.status_code, 409)
+            self.assertEqual(len(client.get('/api/weekly').json), 1)
+
+            invalid = '# 另一周报\n\n时间：2026-09-21 至 2026-09-27\n\n### 张三\n内容\n'
+            bad = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(invalid.encode()), 'bad.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(bad.status_code, 400)
+            self.assertEqual(len(client.get('/api/weekly').json), 1)
+            wrong_encoding = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(b'\xff\xfe\xfa'), 'bad.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(wrong_encoding.status_code, 400)
+            wrong_extension = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(markdown.encode()), 'weekly.txt')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(wrong_extension.status_code, 400)
+            repeated_project = '''# 重复项目周报
+
+时间：2026-09-21 至 2026-09-27
+
+## 研发
+### 张三
+内容
+## 研发
+### 李四
+内容
+'''
+            repeated = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(repeated_project.encode()), 'repeated.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(repeated.status_code, 400)
+            self.assertIn('项目重复', repeated.json['error'])
+            oversized = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(b'x' * (backend.MAX_WEEKLY_IMPORT_BYTES + 1)), 'large.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(oversized.status_code, 413)
+            self.assertEqual(len(client.get('/api/weekly').json), 1)
+
+    def test_default_weekly_markdown_export_can_be_imported_again(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            report = client.post('/api/weekly', json={
+                'title': '往返周报', 'week_start': '2026-09-07', 'week_end': '2026-09-13'
+            }, headers=local).json
+            detail = client.post('/api/weekly/' + report['id'] + '/projects', json={
+                'name': '研发', 'required': False
+            }, headers=local).json
+            project_id = detail['projects'][0]['id']
+            client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '张三', 'contents': {project_id: '完成内容\n第二行'}
+            })
+            exported = client.get('/api/weekly/' + report['id'] + '/export').data
+            self.assertEqual(client.delete('/api/weekly/' + report['id'], headers=local).status_code, 200)
+
+            imported = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(exported), 'roundtrip.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(imported.status_code, 201, imported.json)
+            restored = imported.json
+            self.assertEqual(restored['title'], '往返周报')
+            restored_project = next(p for p in restored['projects'] if p['name'] == '研发')
+            self.assertEqual(restored['submissions'][0]['person_name'], '张三')
+            self.assertEqual(
+                restored['submissions'][0]['contents'][restored_project['id']],
+                '完成内容\n第二行',
+            )
 
     def test_threaded_api_adds_and_independent_field_updates(self):
         self.init()
