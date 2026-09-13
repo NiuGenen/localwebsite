@@ -191,6 +191,7 @@ class SQLiteTests(unittest.TestCase):
         db = storage.connect(self.database)
         try:
             with storage.transaction(db):
+                db.execute("ALTER TABLE weekly_submissions DROP COLUMN revision")
                 db.execute("ALTER TABLE weekly_reports ADD COLUMN description TEXT NOT NULL DEFAULT ''")
                 db.execute("UPDATE metadata SET value='1' WHERE key='schema_version'")
                 db.execute("INSERT INTO weekly_reports(id,title,week_start,week_end,created,updated,description) VALUES(?,?,?,?,?,?,?)",
@@ -206,10 +207,12 @@ class SQLiteTests(unittest.TestCase):
         db = storage.connect(self.database)
         try:
             self.assertNotIn('description', {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')})
-            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '2')
+            self.assertIn('revision', {row['name'] for row in db.execute('PRAGMA table_info(weekly_submissions)')})
+            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '3')
             self.assertEqual(db.execute('SELECT title FROM weekly_reports').fetchone()[0], '旧周报')
             self.assertEqual(db.execute('SELECT name FROM weekly_projects').fetchone()[0], '项目')
             self.assertEqual(db.execute('SELECT person_name FROM weekly_submissions').fetchone()[0], '张三')
+            self.assertEqual(db.execute('SELECT revision FROM weekly_submissions').fetchone()[0], 1)
         finally:
             db.close()
         self.assertFalse(storage.migrate(self.database, self.source))
@@ -230,6 +233,7 @@ class SQLiteTests(unittest.TestCase):
                 'person_name': '张三', 'contents': {}
             })
             self.assertEqual(saved.status_code, 200)
+            self.assertEqual(saved.json['revision'], 1)
             self.assertEqual(len(client.get('/api/weekly').json), 7)
             limited = client.get('/api/weekly?limit=5')
             self.assertEqual(limited.status_code, 200)
@@ -240,6 +244,51 @@ class SQLiteTests(unittest.TestCase):
                 response = client.get('/api/weekly?limit=' + value)
                 self.assertEqual(response.status_code, 400)
                 self.assertEqual(response.json['error'], 'limit 必须是正整数')
+
+    def test_weekly_submission_optimistic_lock_prevents_lost_updates(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            report = client.post('/api/weekly', json={
+                'title': '并发测试', 'week_start': '2026-09-07', 'week_end': '2026-09-13'
+            }, headers=local).json
+            detail = client.post('/api/weekly/' + report['id'] + '/projects', json={
+                'name': '研发', 'required': False
+            }, headers=local).json
+            project_id = detail['projects'][0]['id']
+            created = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '张三', 'contents': {project_id: '初始内容'}
+            })
+            self.assertEqual(created.status_code, 200)
+            self.assertEqual(created.json['revision'], 1)
+
+            first = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'submission_id': created.json['id'], 'expected_revision': 1,
+                'person_name': '张三', 'contents': {project_id: '先保存的内容'}
+            })
+            self.assertEqual(first.status_code, 200)
+            self.assertEqual(first.json['revision'], 2)
+
+            stale = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'submission_id': created.json['id'], 'expected_revision': 1,
+                'person_name': '张三', 'contents': {project_id: '过期页面的内容'}
+            })
+            self.assertEqual(stale.status_code, 409)
+            self.assertIn('重新加载', stale.json['error'])
+            current = client.get('/api/weekly/' + report['id']).json['submissions'][0]
+            self.assertEqual(current['contents'][project_id], '先保存的内容')
+            self.assertEqual(current['revision'], 2)
+
+            duplicate = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '张三', 'contents': {project_id: '绕过编辑入口'}
+            })
+            self.assertEqual(duplicate.status_code, 409)
+
+            deleted = client.delete(
+                '/api/weekly/' + report['id'] + '/projects/' + project_id, headers=local
+            )
+            self.assertEqual(deleted.status_code, 200)
+            self.assertEqual(deleted.json['submissions'][0]['revision'], 3)
 
     def test_weekly_markdown_export_omits_unfilled_sections(self):
         self.init()

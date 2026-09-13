@@ -1483,6 +1483,7 @@ footer {
 .weekly-field { display:block; margin-top:1rem; color:#2c3e50; font-weight:600; }
 .weekly-field textarea { display:block; width:100%; min-height:90px; margin-top:.3rem; padding:.6rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; resize:vertical; }
 .weekly-field span { display:block; }
+.weekly-conflict-hint { padding:.65rem .75rem; border:1px solid #e74c3c; border-radius:5px; background:#fdf0ee; color:#c0392b; font-weight:600; line-height:1.5; }
 .weekly-project-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
 .weekly-project-row::first-line { flex:1; }
 .weekly-project-row .btn:first-of-type { margin-left:auto; }

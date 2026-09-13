@@ -262,7 +262,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | GET / PUT / DELETE | `/api/weekly/<id>` | 周报详情（开放）/ 修改或删除（仅本机） |
 | POST | `/api/weekly/<id>/projects` | 添加周报项目（仅本机） |
 | PUT / DELETE | `/api/weekly/<id>/projects/<project_id>` | 修改或删除项目（仅本机） |
-| GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 新增或覆盖人员提交（开放） |
+| GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 新增或按版本修改人员提交（开放） |
 | GET | `/api/weekly/<id>/export?view=project\|person&person=姓名` | 导出 Markdown，可选仅导出指定人员（开放） |
 | POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |
 | POST | `/api/peers/unregister` | 节点主动下线通知（开放，校验 `PEER_SECRET`，按 `host+port` 移除） |
@@ -271,6 +271,11 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | GET | `/api/peers/<id>/file?path=` | 读取节点 `.md` 文件内容用于网页阅读（开放，仅限 `.md`，>5MB 拒绝） |
 | GET | `/api/peers/<id>/doc?path=` | 读取节点 `.doc`/`.docx` 并转 HTML（开放，经中心站转换，>50MB 拒绝） |
 | DELETE | `/api/peers/<id>` | 移除节点（仅本机） |
+
+修改已有周报提交时，请将详情接口返回的 `id` 和 `revision` 分别作为
+`submission_id`、`expected_revision` 提交。保存成功后 `revision` 自动加一；如果内容已被
+其他请求修改，接口返回 HTTP 409，客户端应重新加载最新内容。新增提交从 `revision: 1`
+开始，同一周报内已有的人员名称必须通过修改流程保存。
 
 ### 节点 HTTP 接口（peer.py）
 

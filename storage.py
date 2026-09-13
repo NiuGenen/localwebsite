@@ -20,7 +20,7 @@ COLUMNS = {
     'pages': {'title': 'TEXT', 'description': 'TEXT', 'pinned': 'INTEGER', 'created': 'INTEGER'},
 }
 BOOLS = {'done', 'pinned'}
-SCHEMA_VERSION = '2'
+SCHEMA_VERSION = '3'
 
 
 
@@ -64,7 +64,7 @@ def create_schema(db):
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_submissions (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
         report_id TEXT NOT NULL, person_name TEXT NOT NULL, contents TEXT NOT NULL,
-        created INTEGER NOT NULL, updated INTEGER NOT NULL,
+        revision INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
         UNIQUE(report_id, person_name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
     db.execute('CREATE INDEX IF NOT EXISTS weekly_project_order ON weekly_projects(report_id, position, seq)')
     db.execute('CREATE INDEX IF NOT EXISTS weekly_submission_report ON weekly_submissions(report_id)')
@@ -87,13 +87,24 @@ def check_schema(db):
 def upgrade_schema(db, version):
     if version == SCHEMA_VERSION:
         return False
+    changed = False
     if version == '1':
         columns = {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')}
         if 'description' in columns:
             db.execute('ALTER TABLE weekly_reports DROP COLUMN description')
+        version = '2'
+        changed = True
+    if version == '2':
+        columns = {row['name'] for row in db.execute('PRAGMA table_info(weekly_submissions)')}
+        if 'revision' not in columns:
+            db.execute('ALTER TABLE weekly_submissions ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
+        version = '3'
+        changed = True
+    if version != SCHEMA_VERSION:
+        raise RuntimeError('数据库版本不兼容，请检查迁移状态')
+    if changed:
         db.execute("UPDATE metadata SET value=? WHERE key='schema_version'", (SCHEMA_VERSION,))
-        return True
-    raise RuntimeError('数据库版本不兼容，请检查迁移状态')
+    return changed
 
 
 def encode(table, item):
