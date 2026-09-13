@@ -212,6 +212,18 @@ section {
     transform: translateY(-1px);
 }
 
+.btn-warning {
+    background: #e67e22;
+}
+
+.btn-warning:hover {
+    background: #d35400;
+}
+
+.btn-bordered {
+    border: 2px solid #333;
+}
+
 .content {
     background: #fff;
     border-radius: 8px;
@@ -1464,6 +1476,7 @@ footer {
 }
 
 .weekly-toolbar { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
+.weekly-toolbar-export { margin-left:auto; }
 .weekly-script-tip { background:#eef7ff; border:1px solid #c9e3f7; border-left:4px solid #2980b9; border-radius:8px; padding:1.1rem 1.25rem; margin-bottom:1.25rem; }
 .weekly-script-help summary { cursor:pointer; color:#2c3e50; font-size:1.05rem; font-weight:600; list-style:none; outline:none; user-select:none; }
 .weekly-script-help summary::-webkit-details-marker { display:none; }

@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>每周周报 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=29">
+    <link rel="stylesheet" href="/css/style.css?v=33">
 </head>
 <body>
 <header><h1>本地文件站</h1><nav><a href="/">首页</a><a href="/weekly.html" class="active">每周周报</a><a href="/files/">文件浏览</a><a href="/peers.html">局域网共享</a><a href="/info.html">关于</a></nav></header>
@@ -39,7 +39,7 @@ python3 weekly.py export --year 2026 -o 2026年周报.md</code></pre>
         </details>
     </section>
     <section class="card">
-        <div class="card-pages-head"><h3>全部周报</h3><div><a class="btn btn-sm" id="weekly-defaults" href="/weekly-defaults.html" style="display:none">管理默认项目</a> <button class="btn btn-sm btn-success" id="weekly-create" style="display:none">创建周报</button></div></div>
+        <div class="card-pages-head"><h3>全部周报</h3><div><a class="btn btn-sm btn-warning btn-bordered" id="weekly-defaults" href="/weekly-defaults.html" style="display:none">管理默认项目</a> <button class="btn btn-sm btn-success" id="weekly-create" style="display:none">创建周报</button></div></div>
         <div id="weekly-list" class="page-grid"></div>
         <p id="weekly-empty" class="page-empty" style="display:none">暂无周报。</p>
         <div class="weekly-pagination" id="weekly-pagination" style="display:none"><button type="button" class="btn btn-sm" id="weekly-page-prev">上一页</button><span class="weekly-page-info" id="weekly-page-info"></span><button type="button" class="btn btn-sm" id="weekly-page-next">下一页</button></div>
