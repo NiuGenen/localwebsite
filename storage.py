@@ -20,7 +20,7 @@ COLUMNS = {
     'pages': {'title': 'TEXT', 'description': 'TEXT', 'pinned': 'INTEGER', 'created': 'INTEGER'},
 }
 BOOLS = {'done', 'pinned'}
-SCHEMA_VERSION = '3'
+SCHEMA_VERSION = '4'
 
 
 
@@ -61,17 +61,26 @@ def create_schema(db):
         report_id TEXT NOT NULL, name TEXT NOT NULL, required INTEGER NOT NULL,
         position INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
         UNIQUE(report_id, name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_people (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        report_id TEXT NOT NULL, name TEXT NOT NULL,
+        created INTEGER NOT NULL, updated INTEGER NOT NULL,
+        UNIQUE(report_id, name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_submissions (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
-        report_id TEXT NOT NULL, person_name TEXT NOT NULL, contents TEXT NOT NULL,
+        report_id TEXT NOT NULL, person_id TEXT NOT NULL, contents TEXT NOT NULL,
         revision INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
-        UNIQUE(report_id, person_name), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
+        UNIQUE(report_id, person_id), FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE,
+        FOREIGN KEY(person_id) REFERENCES weekly_people(id) ON DELETE CASCADE)''')
     db.execute('CREATE INDEX IF NOT EXISTS weekly_project_order ON weekly_projects(report_id, position, seq)')
     db.execute('CREATE INDEX IF NOT EXISTS weekly_submission_report ON weekly_submissions(report_id)')
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_default_projects (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL UNIQUE, required INTEGER NOT NULL,
         position INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
+    db.execute('''CREATE TABLE IF NOT EXISTS weekly_default_people (
+        seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
 
 
 def check_schema(db):
@@ -99,6 +108,55 @@ def upgrade_schema(db, version):
         if 'revision' not in columns:
             db.execute('ALTER TABLE weekly_submissions ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
         version = '3'
+        changed = True
+    if version == '3':
+        # Build a stable roster for every report from its existing submissions.
+        submissions = db.execute(
+            'SELECT report_id,person_name,MIN(created) AS created,MAX(updated) AS updated '
+            'FROM weekly_submissions GROUP BY report_id,person_name ORDER BY MIN(seq)'
+        ).fetchall()
+        for row in submissions:
+            db.execute(
+                'INSERT INTO weekly_people(id,report_id,name,created,updated) VALUES(?,?,?,?,?)',
+                (uuid.uuid4().hex[:12], row['report_id'], row['person_name'],
+                 row['created'], row['updated']),
+            )
+
+        # The nearest non-empty historical report best represents the current team.
+        latest = db.execute(
+            'SELECT r.id FROM weekly_reports r WHERE EXISTS '
+            '(SELECT 1 FROM weekly_people p WHERE p.report_id=r.id) '
+            'ORDER BY r.week_end DESC,r.week_start DESC,r.seq DESC LIMIT 1'
+        ).fetchone()
+        if latest:
+            people = db.execute(
+                'SELECT name,created,updated FROM weekly_people WHERE report_id=? '
+                'ORDER BY name COLLATE NOCASE,seq', (latest['id'],)
+            ).fetchall()
+            for person in people:
+                db.execute(
+                    'INSERT INTO weekly_default_people(id,name,created,updated) VALUES(?,?,?,?)',
+                    (uuid.uuid4().hex[:12], person['name'], person['created'], person['updated']),
+                )
+
+        db.execute('DROP INDEX IF EXISTS weekly_submission_report')
+        db.execute('ALTER TABLE weekly_submissions RENAME TO weekly_submissions_legacy')
+        db.execute('''CREATE TABLE weekly_submissions (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+            report_id TEXT NOT NULL, person_id TEXT NOT NULL, contents TEXT NOT NULL,
+            revision INTEGER NOT NULL, created INTEGER NOT NULL, updated INTEGER NOT NULL,
+            UNIQUE(report_id, person_id),
+            FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE,
+            FOREIGN KEY(person_id) REFERENCES weekly_people(id) ON DELETE CASCADE)''')
+        db.execute(
+            'INSERT INTO weekly_submissions(seq,id,report_id,person_id,contents,revision,created,updated) '
+            'SELECT s.seq,s.id,s.report_id,p.id,s.contents,s.revision,s.created,s.updated '
+            'FROM weekly_submissions_legacy s JOIN weekly_people p '
+            'ON p.report_id=s.report_id AND p.name=s.person_name'
+        )
+        db.execute('DROP TABLE weekly_submissions_legacy')
+        db.execute('CREATE INDEX weekly_submission_report ON weekly_submissions(report_id)')
+        version = '4'
         changed = True
     if version != SCHEMA_VERSION:
         raise RuntimeError('数据库版本不兼容，请检查迁移状态')

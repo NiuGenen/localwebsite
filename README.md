@@ -37,8 +37,9 @@
   - 附带维护脚本 `skill/local-features/features.sh`（`search` / `add` 子命令，走 HTTP 接口）及配套 `local-features` 技能，供智能体维护功能库。
 - **内容宽度调节**：首页滑条调节内容区宽度（900–1800px），通过 `localStorage` 记住，全站生效。
 - **本机访问判定**：首页「待办事项」「自定义页面」「实用功能」「自定义网页」「临时文本」「Markdown 阅读」的管理入口仅在 localhost 访问时显示。
-- **每周周报**：周报列表和详情页对局域网开放，按项目或人员查看提交内容；所有人员可提交或选择已有人员修改内容，周报和项目配置仅限 localhost 管理，并支持 Markdown 导出和零依赖只读 Python 客户端。
+- **每周周报**：周报列表和详情页对局域网开放，按项目或人员查看提交内容；人员从周报名单中选择后提交，详情页末尾展示全员提交状态，周报、项目和人员名单仅限 localhost 管理，并支持 Markdown 导出和零依赖只读 Python 客户端。
   - 周报页的“管理默认项目”入口仅 localhost 可见，可维护默认项目名称、必填状态和顺序；创建新周报时自动复制当时的默认项目，详情页仍可单独编辑当前周报项目。
+  - “管理默认人员”入口仅 localhost 可见；创建新周报时复制当前默认人员，之后可在详情页单独增删改本周名单。修改默认名单不会影响已有周报。
 - **首页分组**：Markdown 阅读、待办事项、自定义页面、实用功能和临时文本入口集中在「本机功能」分组，位于默认卡片（含置顶阅读页）与自定义网页卡片之间；仅本机显示，访问判定失败时保持隐藏。
 
 ## 架构
@@ -257,13 +258,17 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | PUT / DELETE | `/api/links/<id>` | 更新 / 删除首页自定义网页卡片（仅本机） |
 | GET / POST | `/api/weekly?limit=N` | 周报列表（开放；GET 可用正整数 `limit` 限制数量，省略则返回全部）/ 创建周报（仅本机） |
 | POST | `/api/weekly/import` | 从默认按项目布局的 Markdown 文件创建周报（仅本机，multipart 字段 `file`） |
-| GET | `/api/weekly/<id>/people` | 指定周报的已提交人员名称列表（开放） |
+| GET | `/api/weekly/<id>/people` | 指定周报的已提交人员名称列表（开放，兼容 weekly.py） |
 | GET / POST | `/api/weekly/default-projects` | 默认项目列表（开放）/ 添加默认项目（仅本机） |
 | PUT / DELETE | `/api/weekly/default-projects/<project_id>` | 修改或删除默认项目（仅本机） |
+| GET / POST | `/api/weekly/default-people` | 默认人员列表（开放）/ 添加默认人员（仅本机） |
+| PUT / DELETE | `/api/weekly/default-people/<person_id>` | 修改或删除默认人员（仅本机） |
 | GET / PUT / DELETE | `/api/weekly/<id>` | 周报详情（开放）/ 修改或删除（仅本机） |
 | POST | `/api/weekly/<id>/projects` | 添加周报项目（仅本机） |
 | PUT / DELETE | `/api/weekly/<id>/projects/<project_id>` | 修改或删除项目（仅本机） |
-| GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 新增或按版本修改人员提交（开放） |
+| POST | `/api/weekly/<id>/people` | 添加本周人员（仅本机） |
+| PUT / DELETE | `/api/weekly/<id>/people/<person_id>` | 修改或删除本周人员（仅本机；删除会同时删除其提交） |
+| GET / POST | `/api/weekly/<id>/submissions` | 查看提交 / 按名单人员 ID 新增或按版本修改提交（开放） |
 | PUT / DELETE | `/api/weekly/<id>/submissions/<submission_id>` | 修改人员名称 / 删除人员全部周报内容（仅本机，需 `expected_revision`） |
 | GET | `/api/weekly/<id>/export?view=project\|person&person=姓名` | 导出 Markdown，可选仅导出指定人员（开放） |
 | POST | `/api/peers/register` | 节点心跳注册（开放，校验 `PEER_SECRET`，按 `host+port` 去重 upsert） |

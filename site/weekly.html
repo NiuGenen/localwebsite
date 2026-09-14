@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>每周周报 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=34">
+    <link rel="stylesheet" href="/css/style.css?v=35">
 </head>
 <body>
 <header><h1>本地文件站</h1><nav><a href="/">首页</a><a href="/weekly.html" class="active">每周周报</a><a href="/files/">文件浏览</a><a href="/peers.html">局域网共享</a><a href="/info.html">关于</a></nav></header>
@@ -39,7 +39,7 @@ python3 weekly.py export --year 2026 -o 2026年周报.md</code></pre>
         </details>
     </section>
     <section class="card">
-        <div class="card-pages-head"><h3>全部周报</h3><div><a class="btn btn-sm btn-warning btn-bordered" id="weekly-defaults" href="/weekly-defaults.html" style="display:none">管理默认项目</a> <button class="btn btn-sm btn-bordered" id="weekly-import" style="display:none">导入周报</button> <button class="btn btn-sm btn-success" id="weekly-create" style="display:none">创建周报</button></div></div>
+        <div class="card-pages-head"><h3>全部周报</h3><div><a class="btn btn-sm btn-warning btn-bordered" id="weekly-defaults" href="/weekly-defaults.html" style="display:none">管理默认项目</a> <a class="btn btn-sm btn-warning btn-bordered" id="weekly-default-people" href="/weekly-default-people.html" style="display:none">管理默认人员</a> <button class="btn btn-sm btn-bordered" id="weekly-import" style="display:none">导入周报</button> <button class="btn btn-sm btn-success" id="weekly-create" style="display:none">创建周报</button></div></div>
         <div id="weekly-list" class="page-grid"></div>
         <p id="weekly-empty" class="page-empty" style="display:none">暂无周报。</p>
         <div class="weekly-pagination" id="weekly-pagination" style="display:none"><button type="button" class="btn btn-sm" id="weekly-page-prev">上一页</button><span class="weekly-page-info" id="weekly-page-info"></span><button type="button" class="btn btn-sm" id="weekly-page-next">下一页</button></div>
@@ -47,7 +47,7 @@ python3 weekly.py export --year 2026 -o 2026年周报.md</code></pre>
 </main>
 <footer><p>&copy; 2026 本地文件站</p></footer>
 <div class="fb-modal-overlay" id="weekly-modal" style="display:none"><div class="fb-modal fb-modal-lg"><h3 class="fb-modal-title" id="weekly-modal-head">创建周报</h3><input id="weekly-title" class="fb-modal-input" placeholder="周报标题"><input id="weekly-start" type="date" class="fb-modal-input"><input id="weekly-end" type="date" class="fb-modal-input"><p id="weekly-hint" class="fb-modal-hint"></p><div class="fb-modal-actions"><button class="btn" id="weekly-cancel">取消</button><button class="btn btn-success" id="weekly-save">创建</button></div></div></div>
-<div class="fb-modal-overlay" id="weekly-import-modal" style="display:none"><div class="fb-modal fb-modal-lg"><h3 class="fb-modal-title">导入周报</h3><p>请选择按项目布局导出的 Markdown 文件。导入时会应用当前默认项目。</p><input id="weekly-import-file" type="file" accept=".md,text/markdown" class="fb-modal-input"><p id="weekly-import-hint" class="fb-modal-hint"></p><div class="fb-modal-actions"><button class="btn" id="weekly-import-cancel">取消</button><button class="btn btn-success" id="weekly-import-save">导入</button></div></div></div>
-<script src="/js/layout.js"></script><script src="/js/weekly.js?v=8"></script>
+<div class="fb-modal-overlay" id="weekly-import-modal" style="display:none"><div class="fb-modal fb-modal-lg"><h3 class="fb-modal-title">导入周报</h3><p>请选择按项目布局导出的 Markdown 文件。导入时会应用当前默认项目和默认人员。</p><input id="weekly-import-file" type="file" accept=".md,text/markdown" class="fb-modal-input"><p id="weekly-import-hint" class="fb-modal-hint"></p><div class="fb-modal-actions"><button class="btn" id="weekly-import-cancel">取消</button><button class="btn btn-success" id="weekly-import-save">导入</button></div></div></div>
+<script src="/js/layout.js"></script><script src="/js/weekly.js?v=9"></script>
 </body>
 </html>

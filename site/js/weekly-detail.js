@@ -11,7 +11,7 @@
     var submitHint = document.getElementById('submit-hint');
     var editingSubmissionId = null;
     var editingRevision = null;
-    var managedSubmission = null;
+    var managedPerson = null;
     var personAdminModal = document.getElementById('person-admin-modal');
     var personAdminName = document.getElementById('person-admin-name');
     var personAdminHint = document.getElementById('person-admin-hint');
@@ -43,6 +43,7 @@
             render();
             renderProjects();
             renderPeople();
+            renderSubmissionStatus();
         });
     }
 
@@ -59,18 +60,22 @@
         if (!box || !data) return;
         box.innerHTML = '';
         document.getElementById('people-admin-hint').textContent = '';
-        empty.style.display = data.submissions.length ? 'none' : '';
-        data.submissions.forEach(function (submission) {
+        empty.style.display = data.people.length ? 'none' : '';
+        data.people.forEach(function (person) {
+            var submission = data.submissions.find(function (item) {
+                return item.person_id === person.id;
+            });
             var row = document.createElement('div');
             row.className = 'weekly-person-row';
             var label = document.createElement('span');
-            label.textContent = submission.person_name;
+            label.textContent = person.name + (submission ? ' · 已提交' : ' · 未提交');
             var edit = document.createElement('button');
             edit.className = 'btn btn-sm';
             edit.textContent = '编辑';
             edit.onclick = function () {
-                managedSubmission = submission;
-                personAdminName.value = submission.person_name;
+                managedPerson = person;
+                document.getElementById('person-admin-head').textContent = '修改人员名称';
+                personAdminName.value = person.name;
                 personAdminHint.textContent = '';
                 personAdminHint.className = 'fb-modal-hint';
                 personAdminModal.style.display = 'flex';
@@ -81,12 +86,15 @@
             remove.className = 'btn btn-sm btn-danger';
             remove.textContent = '删除';
             remove.onclick = function () {
-                if (!confirm('删除人员“' + submission.person_name + '”？该人员在本周报中的所有内容都会被删除，且不可恢复。')) return;
+                var message = submission
+                    ? '删除人员“' + person.name + '”？该人员在本周报中的所有内容都会被删除，且不可恢复。'
+                    : '删除人员“' + person.name + '”？';
+                if (!confirm(message)) return;
                 remove.disabled = true;
-                fetch('/api/weekly/' + id + '/submissions/' + submission.id, {
+                fetch('/api/weekly/' + id + '/people/' + person.id, {
                     method: 'DELETE',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ expected_revision: submission.revision })
+                    body: JSON.stringify({ expected_revision: submission ? submission.revision : null })
                 }).then(function (response) {
                     return response.json().then(function (result) {
                         return { status: response.status, result: result };
@@ -108,6 +116,27 @@
                 });
             };
             row.append(label, edit, remove);
+            box.appendChild(row);
+        });
+    }
+
+    function renderSubmissionStatus() {
+        var box = document.getElementById('submission-status-list');
+        var empty = document.getElementById('submission-status-empty');
+        var submitted = data.people.filter(function (person) { return Boolean(person.submitted); }).length;
+        document.getElementById('submission-status-title').textContent =
+            '提交状态（' + submitted + '/' + data.people.length + '）';
+        box.innerHTML = '';
+        empty.style.display = data.people.length ? 'none' : '';
+        data.people.forEach(function (person) {
+            var row = document.createElement('div');
+            row.className = 'weekly-status-row';
+            var name = document.createElement('span');
+            name.textContent = person.name;
+            var status = document.createElement('span');
+            status.className = person.submitted ? 'weekly-status-done' : 'weekly-status-pending';
+            status.textContent = person.submitted ? '已提交' : '未提交';
+            row.append(name, status);
             box.appendChild(row);
         });
     }
@@ -206,7 +235,29 @@
         fields.innerHTML = '';
         editingSubmissionId = submission ? submission.id : null;
         editingRevision = submission ? submission.revision : null;
-        nameEl.value = submission ? submission.person_name : '';
+        nameEl.innerHTML = '';
+        if (submission) {
+            var selected = document.createElement('option');
+            selected.value = submission.person_id;
+            selected.textContent = submission.person_name;
+            nameEl.appendChild(selected);
+            nameEl.disabled = true;
+        } else {
+            nameEl.disabled = false;
+            var placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '请选择人员（必填）';
+            placeholder.disabled = true;
+            placeholder.selected = true;
+            nameEl.appendChild(placeholder);
+            data.people.forEach(function (person) {
+                var option = document.createElement('option');
+                option.value = person.id;
+                option.textContent = person.name + (person.submitted ? '（已提交）' : '');
+                option.disabled = Boolean(person.submitted);
+                nameEl.appendChild(option);
+            });
+        }
         clearSubmitHint();
         data.projects.forEach(function (project) {
             var value = submission ? (submission.contents[project.id] || '') : '';
@@ -258,6 +309,8 @@
         });
         modal.style.display = 'flex';
         nameEl.focus();
+        submitSave.disabled = !submission && !data.people.some(function (person) { return !person.submitted; });
+        if (submitSave.disabled) showSubmitError('暂无未提交人员，请联系管理员维护本周人员名单。', false);
     }
 
     document.getElementById('submit-btn').onclick = function () { openSubmit(); };
@@ -295,12 +348,11 @@
             return;
         }
         personAdminSave.disabled = true;
-        fetch('/api/weekly/' + id + '/submissions/' + managedSubmission.id, {
-            method: 'PUT',
+        fetch('/api/weekly/' + id + '/people' + (managedPerson ? '/' + managedPerson.id : ''), {
+            method: managedPerson ? 'PUT' : 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                person_name: name,
-                expected_revision: managedSubmission.revision
+                name: name
             })
         }).then(function (response) {
             return response.json().then(function (result) {
@@ -308,11 +360,6 @@
             });
         }).then(function (outcome) {
             if (outcome.result.error) {
-                if (outcome.result.code === 'revision_conflict') {
-                    personAdminModal.style.display = 'none';
-                    load().then(function () { showPeopleError(outcome.result.error); });
-                    return;
-                }
                 personAdminHint.textContent = outcome.result.error;
                 personAdminHint.className = outcome.status === 409
                     ? 'fb-modal-hint weekly-conflict-hint'
@@ -334,7 +381,7 @@
         fields.querySelectorAll('textarea').forEach(function (textarea) {
             contents[textarea.dataset.id] = textarea.value;
         });
-        var payload = { person_name: nameEl.value, contents: contents };
+        var payload = { person_id: nameEl.value, contents: contents };
         if (editingSubmissionId) {
             payload.submission_id = editingSubmissionId;
             payload.expected_revision = editingRevision;
@@ -359,7 +406,8 @@
         }).catch(function () {
             showSubmitError('提交失败，请稍后重试', false);
         }).finally(function () {
-            submitSave.disabled = false;
+            submitSave.disabled = !editingSubmissionId &&
+                !data.people.some(function (person) { return !person.submitted; });
         });
     };
     document.getElementById('view-project').onclick = function () { view = 'project'; render(); };
@@ -382,6 +430,15 @@
                         body: JSON.stringify({ name: name, required: confirm('设置为必填项目？') })
                     }).then(load);
                 }
+            };
+            document.getElementById('add-person').onclick = function () {
+                managedPerson = null;
+                document.getElementById('person-admin-head').textContent = '添加人员';
+                personAdminName.value = '';
+                personAdminHint.textContent = '';
+                personAdminHint.className = 'fb-modal-hint';
+                personAdminModal.style.display = 'flex';
+                personAdminName.focus();
             };
         }
     });

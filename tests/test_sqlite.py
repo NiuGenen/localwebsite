@@ -59,6 +59,12 @@ class SQLiteTests(unittest.TestCase):
         finally:
             db.close()
 
+    def add_weekly_person(self, client, report_id, name, headers):
+        response = client.post('/api/weekly/' + report_id + '/people',
+                               json={'name': name}, headers=headers)
+        self.assertEqual(response.status_code, 201, response.json)
+        return next(person for person in response.json['people'] if person['name'] == name)
+
     def test_migration_preserves_every_collection_order_and_legacy_fields(self):
         data = {
             'todos': [{'id': 'todo', 'text': '旧事项', 'priority': 'high', 'done': False,
@@ -187,12 +193,81 @@ class SQLiteTests(unittest.TestCase):
             next_report = client.post('/api/weekly', json={'title': '第 2 周', 'week_start': '2026-09-14', 'week_end': '2026-09-20'}, headers=h)
             self.assertEqual([(p['name'], p['required']) for p in next_report.json['projects']], [('研发', True)])
 
+    def test_weekly_people_roster_defaults_status_and_submission_validation(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            remote = {'X-Real-IP': '192.0.2.1'}
+            denied = client.post('/api/weekly/default-people', json={'name': '张三'}, headers=remote)
+            self.assertEqual(denied.status_code, 403)
+            zhang_default = client.post('/api/weekly/default-people', json={'name': ' 张  三 '}, headers=local)
+            self.assertEqual(zhang_default.status_code, 201, zhang_default.json)
+            self.assertEqual(zhang_default.json['name'], '张 三')
+            li_default = client.post('/api/weekly/default-people', json={'name': '李四'}, headers=local)
+            self.assertEqual(li_default.status_code, 201)
+            self.assertEqual(client.post('/api/weekly/default-people', json={'name': '李四'}, headers=local).status_code, 409)
+
+            report = client.post('/api/weekly', json={
+                'title': '人员名单', 'week_start': '2026-09-14', 'week_end': '2026-09-20'
+            }, headers=local).json
+            self.assertEqual([person['name'] for person in report['people']], ['张 三', '李四'])
+            self.assertEqual([person['submitted'] for person in report['people']], [0, 0])
+            unknown = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_name': '王五', 'contents': {}
+            })
+            self.assertEqual(unknown.status_code, 400)
+            saved = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_id': report['people'][0]['id'], 'contents': {}
+            })
+            self.assertEqual(saved.status_code, 200, saved.json)
+            current = client.get('/api/weekly/' + report['id']).json
+            self.assertEqual([(p['name'], p['submitted']) for p in current['people']],
+                             [('张 三', 1), ('李四', 0)])
+            self.assertEqual(client.get('/api/weekly/' + report['id'] + '/people').json, ['张 三'])
+            roster_person = next(p for p in current['people'] if p['name'] == '张 三')
+            renamed_roster = client.put(
+                '/api/weekly/' + report['id'] + '/people/' + roster_person['id'],
+                json={'name': '张三（本周）'}, headers=local,
+            )
+            self.assertEqual(renamed_roster.status_code, 200, renamed_roster.json)
+            self.assertEqual(renamed_roster.json['submissions'][0]['person_name'], '张三（本周）')
+            self.assertEqual(renamed_roster.json['submissions'][0]['id'], saved.json['id'])
+            stale_delete = client.delete(
+                '/api/weekly/' + report['id'] + '/people/' + roster_person['id'],
+                json={'expected_revision': 99}, headers=local,
+            )
+            self.assertEqual(stale_delete.status_code, 409)
+            removed = client.delete(
+                '/api/weekly/' + report['id'] + '/people/' + roster_person['id'],
+                json={'expected_revision': 1}, headers=local,
+            )
+            self.assertEqual(removed.status_code, 200)
+            self.assertEqual(client.get('/api/weekly/' + report['id']).json['submissions'], [])
+
+            renamed = client.put('/api/weekly/default-people/' + li_default.json['id'],
+                                 json={'name': '王五'}, headers=local)
+            self.assertEqual(renamed.status_code, 200)
+            self.assertEqual([p['name'] for p in client.get('/api/weekly/' + report['id']).json['people']],
+                             ['李四'])
+            next_report = client.post('/api/weekly', json={
+                'title': '下一周', 'week_start': '2026-09-21', 'week_end': '2026-09-27'
+            }, headers=local).json
+            self.assertEqual([p['name'] for p in next_report['people']], ['张 三', '王五'])
+
     def test_weekly_schema_upgrade_drops_description_and_preserves_relations(self):
         self.init()
         db = storage.connect(self.database)
         try:
             with storage.transaction(db):
-                db.execute("ALTER TABLE weekly_submissions DROP COLUMN revision")
+                db.execute("DROP TABLE weekly_submissions")
+                db.execute("DROP TABLE weekly_people")
+                db.execute("DROP TABLE weekly_default_people")
+                db.execute('''CREATE TABLE weekly_submissions (
+                    seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
+                    report_id TEXT NOT NULL, person_name TEXT NOT NULL, contents TEXT NOT NULL,
+                    created INTEGER NOT NULL, updated INTEGER NOT NULL,
+                    UNIQUE(report_id, person_name),
+                    FOREIGN KEY(report_id) REFERENCES weekly_reports(id) ON DELETE CASCADE)''')
                 db.execute("ALTER TABLE weekly_reports ADD COLUMN description TEXT NOT NULL DEFAULT ''")
                 db.execute("UPDATE metadata SET value='1' WHERE key='schema_version'")
                 db.execute("INSERT INTO weekly_reports(id,title,week_start,week_end,created,updated,description) VALUES(?,?,?,?,?,?,?)",
@@ -209,10 +284,11 @@ class SQLiteTests(unittest.TestCase):
         try:
             self.assertNotIn('description', {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')})
             self.assertIn('revision', {row['name'] for row in db.execute('PRAGMA table_info(weekly_submissions)')})
-            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '3')
+            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '4')
             self.assertEqual(db.execute('SELECT title FROM weekly_reports').fetchone()[0], '旧周报')
             self.assertEqual(db.execute('SELECT name FROM weekly_projects').fetchone()[0], '项目')
-            self.assertEqual(db.execute('SELECT person_name FROM weekly_submissions').fetchone()[0], '张三')
+            self.assertEqual(db.execute('SELECT name FROM weekly_people').fetchone()[0], '张三')
+            self.assertEqual(db.execute('SELECT name FROM weekly_default_people').fetchone()[0], '张三')
             self.assertEqual(db.execute('SELECT revision FROM weekly_submissions').fetchone()[0], 1)
         finally:
             db.close()
@@ -230,8 +306,9 @@ class SQLiteTests(unittest.TestCase):
                 }, headers=h)
                 self.assertEqual(response.status_code, 201)
             latest = client.get('/api/weekly?limit=1').json[0]
+            person = self.add_weekly_person(client, latest['id'], '张三', h)
             saved = client.post('/api/weekly/' + latest['id'] + '/submissions', json={
-                'person_name': '张三', 'contents': {}
+                'person_id': person['id'], 'contents': {}
             })
             self.assertEqual(saved.status_code, 200)
             self.assertEqual(saved.json['revision'], 1)
@@ -257,22 +334,23 @@ class SQLiteTests(unittest.TestCase):
                 'name': '研发', 'required': False
             }, headers=local).json
             project_id = detail['projects'][0]['id']
+            person = self.add_weekly_person(client, report['id'], '张三', local)
             created = client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '张三', 'contents': {project_id: '初始内容'}
+                'person_id': person['id'], 'contents': {project_id: '初始内容'}
             })
             self.assertEqual(created.status_code, 200)
             self.assertEqual(created.json['revision'], 1)
 
             first = client.post('/api/weekly/' + report['id'] + '/submissions', json={
                 'submission_id': created.json['id'], 'expected_revision': 1,
-                'person_name': '张三', 'contents': {project_id: '先保存的内容'}
+                'person_id': person['id'], 'contents': {project_id: '先保存的内容'}
             })
             self.assertEqual(first.status_code, 200)
             self.assertEqual(first.json['revision'], 2)
 
             stale = client.post('/api/weekly/' + report['id'] + '/submissions', json={
                 'submission_id': created.json['id'], 'expected_revision': 1,
-                'person_name': '张三', 'contents': {project_id: '过期页面的内容'}
+                'person_id': person['id'], 'contents': {project_id: '过期页面的内容'}
             })
             self.assertEqual(stale.status_code, 409)
             self.assertIn('重新加载', stale.json['error'])
@@ -281,7 +359,7 @@ class SQLiteTests(unittest.TestCase):
             self.assertEqual(current['revision'], 2)
 
             duplicate = client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '张三', 'contents': {project_id: '绕过编辑入口'}
+                'person_id': person['id'], 'contents': {project_id: '绕过编辑入口'}
             })
             self.assertEqual(duplicate.status_code, 409)
 
@@ -303,11 +381,13 @@ class SQLiteTests(unittest.TestCase):
                 'name': '研发', 'required': False
             }, headers=local).json
             project_id = detail['projects'][0]['id']
+            first_person = self.add_weekly_person(client, report['id'], '张三', local)
+            second_person = self.add_weekly_person(client, report['id'], '李四', local)
             first = client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '张三', 'contents': {project_id: '保留的内容'}
+                'person_id': first_person['id'], 'contents': {project_id: '保留的内容'}
             }).json
             second = client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '李四', 'contents': {project_id: '其他内容'}
+                'person_id': second_person['id'], 'contents': {project_id: '其他内容'}
             }).json
             path = '/api/weekly/' + report['id'] + '/submissions/' + first['id']
 
@@ -374,12 +454,14 @@ class SQLiteTests(unittest.TestCase):
                             json={'name': name, 'required': False}, headers=h)
             detail = client.get('/api/weekly/' + report['id']).json
             project_ids = {p['name']: p['id'] for p in detail['projects']}
+            zhang = self.add_weekly_person(client, report['id'], '张三', h)
+            li = self.add_weekly_person(client, report['id'], '李四', h)
             client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '张三',
+                'person_id': zhang['id'],
                 'contents': {project_ids['已填写项目']: '完成内容', project_ids['空项目']: '   '}
             })
             client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '李四',
+                'person_id': li['id'],
                 'contents': {project_ids['已填写项目']: '', project_ids['空项目']: ''}
             })
             people = client.get('/api/weekly/' + report['id'] + '/people')
@@ -411,6 +493,8 @@ class SQLiteTests(unittest.TestCase):
                         json={'name': '研发', 'required': True}, headers=local)
             client.post('/api/weekly/default-projects',
                         json={'name': '例行事项', 'required': False}, headers=local)
+            client.post('/api/weekly/default-people',
+                        json={'name': '王五'}, headers=local)
             markdown = '''# 导入周报
 
 时间：2026-09-14 至 2026-09-20
@@ -446,6 +530,8 @@ class SQLiteTests(unittest.TestCase):
             project_ids = {project['name']: project['id'] for project in report['projects']}
             submissions = {item['person_name']: item for item in report['submissions']}
             self.assertEqual(set(submissions), {'张三', '李四'})
+            self.assertEqual([person['name'] for person in report['people']], ['张三', '李四', '王五'])
+            self.assertFalse(next(person for person in report['people'] if person['name'] == '王五')['submitted'])
             self.assertEqual(submissions['张三']['contents'][project_ids['研发']], '完成核心功能')
             self.assertEqual(submissions['张三']['contents'][project_ids['临时项目']], '处理临时任务')
             self.assertEqual(submissions['张三']['contents'][project_ids['例行事项']], '')
@@ -505,8 +591,9 @@ class SQLiteTests(unittest.TestCase):
                 'name': '研发', 'required': False
             }, headers=local).json
             project_id = detail['projects'][0]['id']
+            person = self.add_weekly_person(client, report['id'], '张三', local)
             client.post('/api/weekly/' + report['id'] + '/submissions', json={
-                'person_name': '张三', 'contents': {project_id: '完成内容\n第二行'}
+                'person_id': person['id'], 'contents': {project_id: '完成内容\n第二行'}
             })
             exported = client.get('/api/weekly/' + report['id'] + '/export').data
             self.assertEqual(client.delete('/api/weekly/' + report['id'], headers=local).status_code, 200)

@@ -1291,6 +1291,63 @@ def api_weekly_default_project_delete(project_id):
     if not get_db().execute("DELETE FROM weekly_default_projects WHERE id=?",(project_id,)).rowcount:return jsonify({"error":"默认项目不存在"}),404
     return jsonify({"success":True})
 
+def weekly_person_name(value):
+    return re.sub(r'\s+', ' ', (value or '').strip())
+
+@app.route("/api/weekly/default-people", methods=["GET"])
+def api_weekly_default_people():
+    rows = get_db().execute(
+        "SELECT * FROM weekly_default_people ORDER BY name COLLATE NOCASE,seq"
+    ).fetchall()
+    return jsonify([dict(row) for row in rows])
+
+@app.route("/api/weekly/default-people", methods=["POST"])
+@db_write
+def api_weekly_default_person_create():
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    name = weekly_person_name((request.get_json() or {}).get("name"))
+    if not name or len(name) > 100:
+        return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    if get_db().execute("SELECT 1 FROM weekly_default_people WHERE name=?", (name,)).fetchone():
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    now = int(time.time()); person_id = uuid.uuid4().hex[:12]
+    get_db().execute(
+        "INSERT INTO weekly_default_people(id,name,created,updated) VALUES(?,?,?,?)",
+        (person_id, name, now, now),
+    )
+    return jsonify(dict(get_db().execute(
+        "SELECT * FROM weekly_default_people WHERE id=?", (person_id,)
+    ).fetchone())), 201
+
+@app.route("/api/weekly/default-people/<person_id>", methods=["PUT"])
+@db_write
+def api_weekly_default_person_update(person_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    row = get_db().execute("SELECT * FROM weekly_default_people WHERE id=?", (person_id,)).fetchone()
+    if not row: return jsonify({"error": "默认人员不存在"}), 404
+    name = weekly_person_name((request.get_json() or {}).get("name", row["name"]))
+    if not name or len(name) > 100:
+        return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    if get_db().execute(
+        "SELECT 1 FROM weekly_default_people WHERE name=? AND id<>?", (name, person_id)
+    ).fetchone():
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    get_db().execute(
+        "UPDATE weekly_default_people SET name=?,updated=? WHERE id=?",
+        (name, int(time.time()), person_id),
+    )
+    return jsonify(dict(get_db().execute(
+        "SELECT * FROM weekly_default_people WHERE id=?", (person_id,)
+    ).fetchone()))
+
+@app.route("/api/weekly/default-people/<person_id>", methods=["DELETE"])
+@db_write
+def api_weekly_default_person_delete(person_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    if not get_db().execute("DELETE FROM weekly_default_people WHERE id=?", (person_id,)).rowcount:
+        return jsonify({"error": "默认人员不存在"}), 404
+    return jsonify({"success": True})
+
 def weekly_report(row):
     return dict(row) if row else None
 
@@ -1300,12 +1357,24 @@ def weekly_detail(report_id):
     if not report:
         return None
     projects = [dict(r) for r in db.execute("SELECT * FROM weekly_projects WHERE report_id=? ORDER BY position, seq", (report_id,))]
+    people = [dict(row) for row in db.execute(
+        "SELECT p.*,CASE WHEN s.id IS NULL THEN 0 ELSE 1 END AS submitted,"
+        "s.id AS submission_id,s.revision AS submission_revision "
+        "FROM weekly_people p LEFT JOIN weekly_submissions s "
+        "ON s.report_id=p.report_id AND s.person_id=p.id "
+        "WHERE p.report_id=? ORDER BY p.name COLLATE NOCASE,p.seq", (report_id,)
+    )]
     submissions = []
-    for r in db.execute("SELECT * FROM weekly_submissions WHERE report_id=? ORDER BY person_name COLLATE NOCASE, seq", (report_id,)):
+    for r in db.execute(
+        "SELECT s.*,p.name AS person_name FROM weekly_submissions s "
+        "JOIN weekly_people p ON p.id=s.person_id "
+        "WHERE s.report_id=? ORDER BY p.name COLLATE NOCASE,p.seq", (report_id,)
+    ):
         item = dict(r)
         item["contents"] = json.loads(item["contents"] or "{}")
         submissions.append(item)
     report["projects"] = projects
+    report["people"] = people
     report["submissions"] = submissions
     return report
 
@@ -1345,6 +1414,14 @@ def api_weekly_create():
     for project in defaults:
         pid = uuid.uuid4().hex[:12]
         get_db().execute("INSERT INTO weekly_projects(id,report_id,name,required,position,created,updated) VALUES(?,?,?,?,?,?,?)", (pid, item["id"], project["name"], project["required"], project["position"], now, now))
+    people = get_db().execute(
+        "SELECT name FROM weekly_default_people ORDER BY name COLLATE NOCASE,seq"
+    ).fetchall()
+    for person in people:
+        get_db().execute(
+            "INSERT INTO weekly_people(id,report_id,name,created,updated) VALUES(?,?,?,?,?)",
+            (uuid.uuid4().hex[:12], item["id"], person["name"], now, now),
+        )
     return jsonify(weekly_detail(item["id"])), 201
 
 
@@ -1414,6 +1491,26 @@ def api_weekly_import():
             )
             projects[imported_project["name"]] = {"id": project_id, "required": False}
 
+        people = {}
+        defaults = db.execute(
+            "SELECT name FROM weekly_default_people ORDER BY name COLLATE NOCASE,seq"
+        ).fetchall()
+        for default in defaults:
+            person_id = uuid.uuid4().hex[:12]
+            db.execute(
+                "INSERT INTO weekly_people(id,report_id,name,created,updated) VALUES(?,?,?,?,?)",
+                (person_id, report_id, default["name"], now, now),
+            )
+            people[default["name"]] = person_id
+        for person in imported["people"]:
+            if person not in people:
+                person_id = uuid.uuid4().hex[:12]
+                db.execute(
+                    "INSERT INTO weekly_people(id,report_id,name,created,updated) VALUES(?,?,?,?,?)",
+                    (person_id, report_id, person, now, now),
+                )
+                people[person] = person_id
+
         imported_by_project = {project["name"]: project for project in imported["projects"]}
         for person in imported["people"]:
             contents = {}
@@ -1423,9 +1520,9 @@ def api_weekly_import():
             submission_id = uuid.uuid4().hex
             db.execute(
                 "INSERT INTO weekly_submissions"
-                "(id,report_id,person_name,contents,revision,created,updated) "
+                "(id,report_id,person_id,contents,revision,created,updated) "
                 "VALUES(?,?,?,?,?,?,?)",
-                (submission_id, report_id, person,
+                (submission_id, report_id, people[person],
                  json.dumps(contents, ensure_ascii=False), 1, now, now),
             )
     return jsonify(weekly_detail(report_id)), 201
@@ -1497,18 +1594,93 @@ def api_weekly_people(report_id):
     if not db.execute("SELECT 1 FROM weekly_reports WHERE id=?", (report_id,)).fetchone():
         return jsonify({"error": "周报不存在"}), 404
     rows = db.execute(
-        "SELECT person_name FROM weekly_submissions WHERE report_id=? "
-        "ORDER BY person_name COLLATE NOCASE, seq", (report_id,)
+        "SELECT p.name FROM weekly_submissions s JOIN weekly_people p ON p.id=s.person_id "
+        "WHERE s.report_id=? ORDER BY p.name COLLATE NOCASE,p.seq", (report_id,)
     ).fetchall()
-    return jsonify([row["person_name"] for row in rows])
+    return jsonify([row["name"] for row in rows])
+
+@app.route("/api/weekly/<report_id>/people", methods=["POST"])
+@db_write
+def api_weekly_person_create(report_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    if not get_db().execute("SELECT 1 FROM weekly_reports WHERE id=?", (report_id,)).fetchone():
+        return jsonify({"error": "周报不存在"}), 404
+    name = weekly_person_name((request.get_json() or {}).get("name"))
+    if not name or len(name) > 100:
+        return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    if get_db().execute(
+        "SELECT 1 FROM weekly_people WHERE report_id=? AND name=?", (report_id, name)
+    ).fetchone():
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    now = int(time.time()); person_id = uuid.uuid4().hex[:12]
+    get_db().execute(
+        "INSERT INTO weekly_people(id,report_id,name,created,updated) VALUES(?,?,?,?,?)",
+        (person_id, report_id, name, now, now),
+    )
+    return jsonify(weekly_detail(report_id)), 201
+
+@app.route("/api/weekly/<report_id>/people/<person_id>", methods=["PUT"])
+@db_write
+def api_weekly_person_update(report_id, person_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    person = get_db().execute(
+        "SELECT * FROM weekly_people WHERE id=? AND report_id=?", (person_id, report_id)
+    ).fetchone()
+    if not person: return jsonify({"error": "人员不存在"}), 404
+    name = weekly_person_name((request.get_json() or {}).get("name", person["name"]))
+    if not name or len(name) > 100:
+        return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    if get_db().execute(
+        "SELECT 1 FROM weekly_people WHERE report_id=? AND name=? AND id<>?",
+        (report_id, name, person_id),
+    ).fetchone():
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    get_db().execute(
+        "UPDATE weekly_people SET name=?,updated=? WHERE id=?", (name, int(time.time()), person_id)
+    )
+    return jsonify(weekly_detail(report_id))
+
+@app.route("/api/weekly/<report_id>/people/<person_id>", methods=["DELETE"])
+@db_write
+def api_weekly_person_delete(report_id, person_id):
+    if not require_local(): return jsonify({"error": "仅限本机访问"}), 403
+    person = get_db().execute(
+        "SELECT * FROM weekly_people WHERE id=? AND report_id=?", (person_id, report_id)
+    ).fetchone()
+    if not person: return jsonify({"error": "人员不存在"}), 404
+    submission = get_db().execute(
+        "SELECT revision FROM weekly_submissions WHERE report_id=? AND person_id=?",
+        (report_id, person_id),
+    ).fetchone()
+    if submission:
+        revision = (request.get_json(silent=True) or {}).get("expected_revision")
+        if type(revision) is not int or revision != submission["revision"]:
+            return jsonify({
+                "error": "该人员的周报已被其他人修改，请重新加载后再删除",
+                "code": "revision_conflict",
+            }), 409
+    get_db().execute("DELETE FROM weekly_people WHERE id=? AND report_id=?", (person_id, report_id))
+    return jsonify({"success": True})
 
 @app.route("/api/weekly/<report_id>/submissions", methods=["POST"])
 @db_write
 def api_weekly_submission_save(report_id):
     report = weekly_detail(report_id)
     if not report: return jsonify({"error": "周报不存在"}), 404
-    data = request.get_json() or {}; name = re.sub(r'\s+', ' ', (data.get("person_name") or "").strip()); contents = data.get("contents") or {}; submission_id = data.get("submission_id"); expected_revision = data.get("expected_revision")
-    if not name or len(name) > 100: return jsonify({"error": "人员名称不能为空且不能超过 100 个字符"}), 400
+    data = request.get_json() or {}; contents = data.get("contents") or {}; submission_id = data.get("submission_id"); expected_revision = data.get("expected_revision")
+    person = None
+    if isinstance(data.get("person_id"), str):
+        person = get_db().execute(
+            "SELECT * FROM weekly_people WHERE id=? AND report_id=?",
+            (data["person_id"], report_id),
+        ).fetchone()
+    elif data.get("person_name") is not None:
+        name = weekly_person_name(data.get("person_name"))
+        person = get_db().execute(
+            "SELECT * FROM weekly_people WHERE report_id=? AND name=?", (report_id, name)
+        ).fetchone()
+    if not person:
+        return jsonify({"error": "请选择周报人员名单中的人员"}), 400
     allowed = {p["id"]: p for p in report["projects"]}
     if not isinstance(contents, dict): return jsonify({"error": "项目内容格式无效"}), 400
     for pid, project in allowed.items():
@@ -1519,21 +1691,20 @@ def api_weekly_submission_save(report_id):
     if submission_id is not None:
         if not isinstance(submission_id, str) or type(expected_revision) is not int or expected_revision < 1:
             return jsonify({"error": "提交版本无效，请重新加载后再保存"}), 409
-        old = get_db().execute("SELECT id FROM weekly_submissions WHERE id=? AND report_id=?", (submission_id, report_id)).fetchone()
+        old = get_db().execute("SELECT id,person_id FROM weekly_submissions WHERE id=? AND report_id=?", (submission_id, report_id)).fetchone()
         if not old:
             return jsonify({"error": "该人员的周报已发生变化，请重新加载后再保存"}), 409
-        duplicate = get_db().execute("SELECT 1 FROM weekly_submissions WHERE report_id=? AND person_name=? AND id<>?", (report_id, name, submission_id)).fetchone()
-        if duplicate:
-            return jsonify({"error": "人员名称已存在：" + name}), 409
-        changed = get_db().execute("UPDATE weekly_submissions SET person_name=?,contents=?,revision=revision+1,updated=? WHERE id=? AND revision=?", (name, encoded, now, submission_id, expected_revision)).rowcount
+        if old["person_id"] != person["id"]:
+            return jsonify({"error": "不能更改已有提交的人员"}), 409
+        changed = get_db().execute("UPDATE weekly_submissions SET contents=?,revision=revision+1,updated=? WHERE id=? AND revision=?", (encoded, now, submission_id, expected_revision)).rowcount
         if not changed:
             return jsonify({"error": "该人员的周报已被其他人修改，请重新加载后再保存"}), 409
         sid = submission_id
     else:
-        if get_db().execute("SELECT 1 FROM weekly_submissions WHERE report_id=? AND person_name=?", (report_id, name)).fetchone():
+        if get_db().execute("SELECT 1 FROM weekly_submissions WHERE report_id=? AND person_id=?", (report_id, person["id"])).fetchone():
             return jsonify({"error": "该人员已有提交，请使用“修改已有提交”加载最新内容"}), 409
         sid = uuid.uuid4().hex
-        get_db().execute("INSERT INTO weekly_submissions(id,report_id,person_name,contents,revision,created,updated) VALUES(?,?,?,?,?,?,?)", (sid, report_id, name, encoded, 1, now, now))
+        get_db().execute("INSERT INTO weekly_submissions(id,report_id,person_id,contents,revision,created,updated) VALUES(?,?,?,?,?,?,?)", (sid, report_id, person["id"], encoded, 1, now, now))
     return jsonify(next(s for s in weekly_detail(report_id)["submissions"] if s["id"] == sid))
 
 
@@ -1550,27 +1721,30 @@ def api_weekly_submission_rename(report_id, submission_id):
     if type(revision) is not int or revision < 1:
         return jsonify({"error": "提交版本无效，请重新加载后再保存"}), 409
     submission = get_db().execute(
-        "SELECT id FROM weekly_submissions WHERE id=? AND report_id=?",
+        "SELECT id,person_id,revision FROM weekly_submissions WHERE id=? AND report_id=?",
         (submission_id, report_id),
     ).fetchone()
     if not submission:
         return jsonify({"error": "人员提交不存在"}), 404
-    duplicate = get_db().execute(
-        "SELECT 1 FROM weekly_submissions WHERE report_id=? AND person_name=? AND id<>?",
-        (report_id, name, submission_id),
-    ).fetchone()
-    if duplicate:
-        return jsonify({"error": "人员名称已存在：" + name}), 409
-    changed = get_db().execute(
-        "UPDATE weekly_submissions SET person_name=?,revision=revision+1,updated=? "
-        "WHERE id=? AND report_id=? AND revision=?",
-        (name, int(time.time()), submission_id, report_id, revision),
-    ).rowcount
-    if not changed:
+    if submission["revision"] != revision:
         return jsonify({
             "error": "该人员的周报已被其他人修改，请重新加载后再保存",
             "code": "revision_conflict",
         }), 409
+    duplicate = get_db().execute(
+        "SELECT 1 FROM weekly_people WHERE report_id=? AND name=? AND id<>?",
+        (report_id, name, submission["person_id"]),
+    ).fetchone()
+    if duplicate:
+        return jsonify({"error": "人员名称已存在：" + name}), 409
+    get_db().execute(
+        "UPDATE weekly_people SET name=?,updated=? WHERE id=?",
+        (name, int(time.time()), submission["person_id"]),
+    )
+    get_db().execute(
+        "UPDATE weekly_submissions SET revision=revision+1,updated=? WHERE id=?",
+        (int(time.time()), submission_id),
+    )
     return jsonify(next(
         item for item in weekly_detail(report_id)["submissions"]
         if item["id"] == submission_id
@@ -1587,20 +1761,24 @@ def api_weekly_submission_delete(report_id, submission_id):
     if type(revision) is not int or revision < 1:
         return jsonify({"error": "提交版本无效，请重新加载后再删除"}), 409
     submission = get_db().execute(
-        "SELECT id FROM weekly_submissions WHERE id=? AND report_id=?",
+        "SELECT id,person_id FROM weekly_submissions WHERE id=? AND report_id=?",
         (submission_id, report_id),
     ).fetchone()
     if not submission:
         return jsonify({"error": "人员提交不存在"}), 404
-    changed = get_db().execute(
-        "DELETE FROM weekly_submissions WHERE id=? AND report_id=? AND revision=?",
-        (submission_id, report_id, revision),
-    ).rowcount
-    if not changed:
+    current = get_db().execute(
+        "SELECT revision FROM weekly_submissions WHERE id=? AND report_id=?",
+        (submission_id, report_id),
+    ).fetchone()
+    if not current or current["revision"] != revision:
         return jsonify({
             "error": "该人员的周报已被其他人修改，请重新加载后再删除",
             "code": "revision_conflict",
         }), 409
+    get_db().execute(
+        "DELETE FROM weekly_people WHERE id=? AND report_id=?",
+        (submission["person_id"], report_id),
+    )
     return jsonify({"success": True})
 
 @app.route("/api/weekly/<report_id>/export")

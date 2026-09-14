@@ -3,6 +3,7 @@
     var empty = document.getElementById('weekly-empty');
     var create = document.getElementById('weekly-create');
     var defaults = document.getElementById('weekly-defaults');
+    var defaultPeople = document.getElementById('weekly-default-people');
     var importButton = document.getElementById('weekly-import');
     var importModal = document.getElementById('weekly-import-modal');
     var importFile = document.getElementById('weekly-import-file');
@@ -226,6 +227,7 @@
         if (result.local) {
             create.style.display = '';
             defaults.style.display = '';
+            defaultPeople.style.display = '';
             importButton.style.display = '';
         }
         load();

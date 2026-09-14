@@ -1508,6 +1508,10 @@ footer {
 .weekly-project-row > span { flex:1; }
 .weekly-person-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
 .weekly-person-row > span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.weekly-status-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; padding:.55rem .2rem; border-bottom:1px solid #eee; }
+.weekly-status-done, .weekly-status-pending { flex-shrink:0; font-size:.85rem; font-weight:700; }
+.weekly-status-done { color:#27ae60; }
+.weekly-status-pending { color:#999; }
 .weekly-default-required { display:block; margin:1rem 0; color:#2c3e50; }
 .weekly-list-row { display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem; }
 .weekly-list-row .page-entry { flex:1; margin-bottom:0; text-decoration:none; }
