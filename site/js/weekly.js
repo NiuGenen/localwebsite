@@ -24,6 +24,17 @@
     var currentPage = 0;
     var MONTHS_PER_PAGE = 2;
 
+    function localDateKey(date) {
+        var year = date.getFullYear();
+        var month = String(date.getMonth() + 1).padStart(2, '0');
+        var day = String(date.getDate()).padStart(2, '0');
+        return year + '-' + month + '-' + day;
+    }
+
+    function isCurrentReport(report, today) {
+        return report.week_start <= today && today <= report.week_end;
+    }
+
     function appendMonthHeader(month) {
         var parts = month.split('-');
         var header = document.createElement('div');
@@ -32,7 +43,7 @@
         list.appendChild(header);
     }
 
-    function appendReport(report) {
+    function appendReport(report, today) {
         var row = document.createElement('div');
         row.className = 'weekly-list-row';
         var link = document.createElement('a');
@@ -41,6 +52,13 @@
         link.innerHTML = '<div class="page-entry-link"><div class="page-entry-title"></div><div class="weekly-submission-count"></div></div>';
         link.querySelector('.page-entry-title').textContent =
             report.title + '（' + report.week_start + ' 至 ' + report.week_end + '）';
+        if (isCurrentReport(report, today)) {
+            link.classList.add('weekly-current');
+            var badge = document.createElement('span');
+            badge.className = 'weekly-current-badge';
+            badge.textContent = '本周';
+            link.querySelector('.page-entry-title').after(badge);
+        }
         link.querySelector('.weekly-submission-count').textContent =
             '已提交人数：' + report.submission_count;
         row.appendChild(link);
@@ -83,11 +101,14 @@
 
         var groups = groupReportsByEndMonth();
         var pageCount = Math.ceil(groups.length / MONTHS_PER_PAGE);
+        var today = localDateKey(new Date());
         currentPage = Math.max(0, Math.min(currentPage, pageCount - 1));
         groups.slice(currentPage * MONTHS_PER_PAGE, (currentPage + 1) * MONTHS_PER_PAGE)
             .forEach(function (group) {
                 appendMonthHeader(group.month);
-                group.reports.forEach(appendReport);
+                group.reports.forEach(function (report) {
+                    appendReport(report, today);
+                });
             });
         previousPage.disabled = currentPage === 0;
         nextPage.disabled = currentPage === pageCount - 1;

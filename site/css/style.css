@@ -1513,6 +1513,9 @@ footer {
 .weekly-list-row .page-entry { flex:1; margin-bottom:0; text-decoration:none; }
 .weekly-list-row .page-entry-link { display:flex; align-items:center; gap:1rem; }
 .weekly-list-row .page-entry-title { flex:1; min-width:0; margin-bottom:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.weekly-list-row .page-entry.weekly-current { border:2px solid #222; background:#fff8e7; }
+.weekly-list-row .page-entry.weekly-current:hover { border-color:#222; background:#fff3d6; }
+.weekly-current-badge { flex-shrink:0; padding:.12rem .45rem; border-radius:999px; background:#f39c12; color:#fff; font-size:.75rem; font-weight:700; line-height:1.4; white-space:nowrap; }
 .weekly-submission-count { flex-shrink:0; color:#7f8c8d; font-size:.85rem; white-space:nowrap; }
 .weekly-month-header { display:flex; align-items:center; gap:.5rem; margin:.75rem 0 .1rem; padding:.15rem 0; color:#999; font-size:.8rem; font-weight:600; letter-spacing:.05em; }
 .weekly-month-header::before, .weekly-month-header::after { content:''; flex:1; height:1px; background:#e5e5e5; }
