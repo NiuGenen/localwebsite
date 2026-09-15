@@ -1,4 +1,5 @@
 import json
+from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import subprocess
@@ -137,10 +138,28 @@ class WeeklyCliTests(unittest.TestCase):
             self.assertEqual(result.stdout, b'')
             self.assertEqual(destination.read_text(encoding='utf-8'), '# 研发周报\n')
 
-    def test_export_without_id_uses_latest_report(self):
-        result = self.run_cli('export')
-        self.assertEqual(result.returncode, 0, result.stderr.decode())
-        self.assertEqual(result.stdout.decode('utf-8'), '# 研发周报\n')
+    def test_export_without_id_uses_report_containing_today(self):
+        original = WeeklyHandler.range_reports
+        today = date.today()
+        WeeklyHandler.range_reports = [
+            {'id': 'report-late', 'title': '年末周报',
+             'week_start': (today + timedelta(days=7)).isoformat(),
+             'week_end': (today + timedelta(days=13)).isoformat(), 'created': 3, 'updated': 3},
+            {'id': 'report-1', 'title': '研发周报',
+             'week_start': (today - timedelta(days=2)).isoformat(),
+             'week_end': (today + timedelta(days=4)).isoformat(), 'created': 1, 'updated': 1},
+        ]
+        try:
+            result = self.run_cli('export')
+            self.assertEqual(result.returncode, 0, result.stderr.decode())
+            self.assertEqual(result.stdout.decode('utf-8'), '# 研发周报\n')
+
+            WeeklyHandler.range_reports = [WeeklyHandler.range_reports[0]]
+            result = self.run_cli('export')
+            self.assertEqual(result.returncode, 1)
+            self.assertIn('没有对应的周报', result.stderr.decode('utf-8'))
+        finally:
+            WeeklyHandler.range_reports = original
 
     def test_export_can_filter_by_person(self):
         result = self.run_cli('export', 'report-1', '--person', '张三')

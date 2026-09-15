@@ -216,7 +216,7 @@ python3 weekly.py list --limit 10                     # 显示最新 10 个
 python3 weekly.py list --json                         # 输出可供程序处理的 JSON
 python3 weekly.py people <周报ID>                     # 查看已提交人员，每行一个姓名
 python3 weekly.py people <周报ID> --json              # 以 JSON 数组输出人员列表
-python3 weekly.py export                              # 导出最新周报到终端
+python3 weekly.py export                              # 导出当前日期所在周报到终端
 python3 weekly.py export <周报ID>                     # 导出指定周报到终端
 python3 weekly.py export <周报ID> > 本周周报.md        # 使用 shell 重定向保存
 python3 weekly.py export <周报ID> --view person -o 按人员.md

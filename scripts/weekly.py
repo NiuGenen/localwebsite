@@ -3,7 +3,7 @@
 
 import argparse
 import calendar
-from datetime import datetime
+from datetime import date, datetime
 import json
 import os
 from pathlib import Path
@@ -84,16 +84,27 @@ def print_people(people):
         print(name)
 
 
-def latest_report_id(server, timeout):
-    reports = request_json(server, "/api/weekly", timeout, {"limit": 1})
+def current_report_id(server, timeout, today=None):
+    reports = request_json(server, "/api/weekly", timeout)
     if not isinstance(reports, list):
         raise WeeklyClientError("服务器返回的周报列表格式无效")
     if not reports:
         raise WeeklyClientError("暂无周报可导出")
-    report_id = reports[0].get("id") if isinstance(reports[0], dict) else None
-    if not isinstance(report_id, str) or not report_id:
-        raise WeeklyClientError("服务器返回的最新周报 ID 无效")
-    return report_id
+    today = today or date.today()
+    for report in reports:
+        if not isinstance(report, dict):
+            raise WeeklyClientError("服务器返回的周报列表格式无效")
+        try:
+            report_start = datetime.strptime(report["week_start"], "%Y-%m-%d").date()
+            report_end = datetime.strptime(report["week_end"], "%Y-%m-%d").date()
+            report_id = report["id"]
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WeeklyClientError("服务器返回的周报日期或 ID 无效") from exc
+        if not isinstance(report_id, str) or not report_id:
+            raise WeeklyClientError("服务器返回的周报日期或 ID 无效")
+        if report_start <= today <= report_end:
+            return report_id
+    raise WeeklyClientError("当前日期（" + today.isoformat() + "）没有对应的周报")
 
 
 def parse_compact_date(value, option):
@@ -212,8 +223,8 @@ def build_parser():
     people_parser.add_argument("report_id", help="周报 ID")
     people_parser.add_argument("--json", dest="as_json", action="store_true", help="输出原始 JSON")
 
-    export_parser = subparsers.add_parser("export", help="获取周报 Markdown（默认最新周报）")
-    export_parser.add_argument("report_id", nargs="?", help="周报 ID；省略时导出最新周报")
+    export_parser = subparsers.add_parser("export", help="获取周报 Markdown（默认当前日期所在周报）")
+    export_parser.add_argument("report_id", nargs="?", help="周报 ID；省略时导出当前日期所在周报")
     export_parser.add_argument("--view", choices=("project", "person"), default="project",
                                help="按项目或人员组织内容（默认：project）")
     export_parser.add_argument("--person", help="仅导出指定人员的内容")
@@ -266,7 +277,7 @@ def main(argv=None):
             if period:
                 markdown = export_range(args, *period)
             else:
-                report_id = args.report_id or latest_report_id(args.server, args.timeout)
+                report_id = args.report_id or current_report_id(args.server, args.timeout)
                 markdown = export_one(args.server, args.timeout, report_id, args.view, args.person)
             if args.output:
                 args.output.write_bytes(markdown)
