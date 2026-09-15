@@ -179,6 +179,11 @@ class WeeklyCliTests(unittest.TestCase):
         self.assertEqual(text.count('\n---\n'), 2)
 
     def test_export_month_year_aliases_and_person_filter(self):
+        result = self.run_cli('export', '--day', '20260911')
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
+        self.assertIn('# 研发周报', result.stdout.decode('utf-8'))
+        self.assertNotIn('# 跨月周报', result.stdout.decode('utf-8'))
+
         result = self.run_cli('export', '--month', '202608')
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertIn('# 跨月周报', result.stdout.decode('utf-8'))
@@ -194,11 +199,14 @@ class WeeklyCliTests(unittest.TestCase):
     def test_export_rejects_invalid_or_conflicting_periods(self):
         cases = [
             ('--start-time', '20260101'),
+            ('--day', '20260230'),
             ('--month', '202613'),
             ('--year', '20x6'),
             ('--start-time', '20261231', '--end-time', '20260101'),
             ('--month', '202608', '--year', '2026'),
+            ('--day', '20260911', '--month', '202609'),
             ('report-1', '--year', '2026'),
+            ('report-1', '--day', '20260911'),
         ]
         for args in cases:
             with self.subTest(args=args):

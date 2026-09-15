@@ -116,13 +116,16 @@ def parse_compact_date(value, option):
 
 def export_period(args):
     explicit = args.start_time is not None or args.end_time is not None
-    aliases = int(args.month is not None) + int(args.year is not None)
+    aliases = int(args.day is not None) + int(args.month is not None) + int(args.year is not None)
     if explicit and (args.start_time is None or args.end_time is None):
         raise WeeklyClientError("--start-time 和 --end-time 必须同时使用")
     if int(explicit) + aliases > 1:
-        raise WeeklyClientError("时间段、--month 和 --year 只能选择一种")
+        raise WeeklyClientError("时间段、--day、--month 和 --year 只能选择一种")
     if args.report_id and (explicit or aliases):
         raise WeeklyClientError("周报 ID 不能与时间段参数同时使用")
+    if args.day is not None:
+        day = parse_compact_date(args.day, "--day")
+        return day, day
     if args.month is not None:
         try:
             month = datetime.strptime(args.month, "%Y%m")
@@ -230,6 +233,7 @@ def build_parser():
     export_parser.add_argument("--person", help="仅导出指定人员的内容")
     export_parser.add_argument("--start-time", help="时间段开始日期，格式 YYYYMMDD")
     export_parser.add_argument("--end-time", help="时间段结束日期，格式 YYYYMMDD")
+    export_parser.add_argument("--day", help="导出包含指定日期的周报，格式 YYYYMMDD")
     export_parser.add_argument("--month", help="按整月导出，格式 YYYYMM")
     export_parser.add_argument("--year", help="按整年导出，格式 YYYY")
     export_parser.add_argument("-o", "--output", type=Path, help="保存路径；省略时输出到终端")

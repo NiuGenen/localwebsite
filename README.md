@@ -221,13 +221,14 @@ python3 weekly.py export <周报ID>                     # 导出指定周报到�
 python3 weekly.py export <周报ID> > 本周周报.md        # 使用 shell 重定向保存
 python3 weekly.py export <周报ID> --view person -o 按人员.md
 python3 weekly.py export <周报ID> --person 张三        # 仅导出指定人员的内容
+python3 weekly.py export --day 20260911               # 导出包含指定日期的周报
 python3 weekly.py export --start-time 20260101 --end-time 20261231  # 导出与时间段有交集的全部周报
 python3 weekly.py export --month 202608                # 导出与 2026 年 8 月有交集的周报
 python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 年相关周报中的内容
 ```
 
 时间段导出按周报开始日期从早到晚排列。只要周报日期与指定时间段有部分重叠便会纳入；
-使用 `--person` 时，会跳过该人员没有提交的周报。`--month` 和 `--year` 分别是整月、整年的快捷写法。
+使用 `--person` 时，会跳过该人员没有提交的周报。`--day` 用于匹配包含指定日期的周报，`--month` 和 `--year` 分别是整月、整年的快捷写法。
 
 脚本默认连接 `http://192.168.8.65:8080`。连接其他部署地址时，在子命令之前添加
 `--server http://<服务器IP>:8080`，或设置环境变量 `WEEKLY_SERVER`。所有命令均为只读操作。

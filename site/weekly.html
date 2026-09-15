@@ -29,11 +29,12 @@ python3 weekly.py people &lt;周报ID&gt; --json</code></pre>
 python3 weekly.py export &lt;周报ID&gt;
 python3 weekly.py export &lt;周报ID&gt; --view person
 python3 weekly.py export &lt;周报ID&gt; --person 张三
+python3 weekly.py export --day 20260911
 python3 weekly.py export --month 202608
 python3 weekly.py export --year 2026 --person 张三
 python3 weekly.py export --start-time 20260101 --end-time 20261231
 python3 weekly.py export --year 2026 -o 2026年周报.md</code></pre>
-                <p>省略周报 ID 时默认导出当前日期所在的周报；如果当天没有对应周报，脚本会给出提示。可按项目或人员排列、筛选指定人员，也可按日期区间、月份或年份合并导出；只要周报与时间段部分重叠就会纳入，并按时间从早到晚排列。</p>
+                <p>省略周报 ID 时默认导出当前日期所在的周报；如果当天没有对应周报，脚本会给出提示。使用 <code>--day YYYYMMDD</code> 可导出包含指定日期的周报。也可按项目或人员排列、筛选指定人员，或按日期区间、月份、年份合并导出；只要周报与时间段部分重叠就会纳入，并按时间从早到晚排列。</p>
                 <p class="weekly-script-hint">脚本默认连接 <code>http://192.168.8.65:8080</code>。如需连接其他服务器，可在子命令前使用 <code>--server http://服务器地址:端口</code>，或设置 <code>WEEKLY_SERVER</code> 环境变量。</p>
             </div>
         </details>
