@@ -15,7 +15,7 @@
             <summary>使用脚本获取周报内容</summary>
             <div class="weekly-script-body">
                 <p>局域网机器只需安装 Python 3，无需其他依赖。运行以下命令可下载脚本并立即输出当前日期所在的周报：</p>
-                <pre><code>curl -O http://192.168.8.65:8080/weekly.py &amp;&amp; python3 weekly.py export</code></pre>
+                <pre><code>curl -OsSL http://192.168.8.65:8080/weekly.py &amp;&amp; python3 weekly.py export</code></pre>
                 <h3>查询周报</h3>
                 <pre><code>python3 weekly.py help
 python3 weekly.py
