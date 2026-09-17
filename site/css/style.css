@@ -1524,9 +1524,11 @@ footer {
 .weekly-month-header { display:flex; align-items:center; gap:.5rem; margin:.75rem 0 .1rem; padding:.15rem 0; color:#999; font-size:.8rem; font-weight:600; letter-spacing:.05em; }
 .weekly-month-header::before, .weekly-month-header::after { content:''; flex:1; height:1px; background:#e5e5e5; }
 .weekly-month-header:first-child { margin-top:0; }
-.weekly-pagination { display:flex; align-items:center; justify-content:center; gap:.75rem; margin-top:1rem; }
+.weekly-pagination { display:flex; align-items:center; justify-content:flex-start; gap:.75rem; margin:0; }
 .weekly-pagination .btn:disabled { opacity:.45; cursor:not-allowed; }
 .weekly-page-info { min-width:3.5rem; color:#666; font-size:.9rem; font-variant-numeric:tabular-nums; text-align:center; }
+.weekly-pages-head { justify-content:flex-start; flex-wrap:wrap; column-gap:1.5rem; row-gap:.75rem; }
+.weekly-head-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin-left:auto; }
 
 .card-pinned p {
     display: -webkit-box;

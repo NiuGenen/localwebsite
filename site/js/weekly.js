@@ -16,8 +16,10 @@
     var end = document.getElementById('weekly-end');
     var hint = document.getElementById('weekly-hint');
     var save = document.getElementById('weekly-save');
+    var firstPage = document.getElementById('weekly-page-first');
     var previousPage = document.getElementById('weekly-page-prev');
     var nextPage = document.getElementById('weekly-page-next');
+    var lastPage = document.getElementById('weekly-page-last');
     var pageInfo = document.getElementById('weekly-page-info');
     var pagination = document.getElementById('weekly-pagination');
     var editingId = null;
@@ -111,8 +113,8 @@
                     appendReport(report, today);
                 });
             });
-        previousPage.disabled = currentPage === 0;
-        nextPage.disabled = currentPage === pageCount - 1;
+        firstPage.disabled = previousPage.disabled = currentPage === 0;
+        nextPage.disabled = lastPage.disabled = currentPage === pageCount - 1;
         pageInfo.textContent = (currentPage + 1) + '/' + pageCount;
     }
 
@@ -185,6 +187,12 @@
             importSave.disabled = false;
         });
     };
+    firstPage.onclick = function () {
+        if (currentPage > 0) {
+            currentPage = 0;
+            render();
+        }
+    };
     previousPage.onclick = function () {
         if (currentPage > 0) {
             currentPage--;
@@ -195,6 +203,13 @@
         var pageCount = Math.ceil(groupReportsByEndMonth().length / MONTHS_PER_PAGE);
         if (currentPage + 1 < pageCount) {
             currentPage++;
+            render();
+        }
+    };
+    lastPage.onclick = function () {
+        var pageCount = Math.ceil(groupReportsByEndMonth().length / MONTHS_PER_PAGE);
+        if (currentPage + 1 < pageCount) {
+            currentPage = pageCount - 1;
             render();
         }
     };
