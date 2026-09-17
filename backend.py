@@ -124,6 +124,23 @@ def safe_join_soft(base, child):
         return None
     return norm
 
+
+def file_created_time(path, stat_result):
+    """Return filesystem birth time when available, otherwise ctime."""
+    birth_time = getattr(stat_result, "st_birthtime", None)
+    if birth_time is not None:
+        return int(birth_time)
+    try:
+        result = subprocess.run(
+            ["stat", "-c", "%W", "--", path],
+            capture_output=True, text=True, timeout=1, check=False)
+        birth_time = int(result.stdout.strip()) if result.returncode == 0 else 0
+        if birth_time > 0:
+            return birth_time
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return int(stat_result.st_ctime)
+
 # ===== 文件浏览 API =====
 
 @app.route("/api/files")
@@ -156,6 +173,7 @@ def api_list_files():
                 "type": "dir" if is_dir else "file",
                 "size": st.st_size if not is_dir else 0,
                 "mtime": int(st.st_mtime),
+                "created": file_created_time(full, st),
                 "blocked": is_blocked(entry_rel)
             })
         except OSError:

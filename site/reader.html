@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 阅读器</title>
-    <link rel="stylesheet" href="/css/style.css?v=11">
+    <link rel="stylesheet" href="/css/style.css?v=40">
     <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
 </head>
 <body>
@@ -21,7 +21,18 @@
     <main>
         <div id="reader-app">
             <div id="file-list">
-                <h2>选择 Markdown 文件</h2>
+                <div class="md-file-list-head">
+                    <h2>选择 Markdown 文件</h2>
+                    <label class="md-file-sort" for="md-file-sort">
+                        <span>显示顺序</span>
+                        <select id="md-file-sort">
+                            <option value="created-desc">创建时间（新→旧）</option>
+                            <option value="created-asc">创建时间（旧→新）</option>
+                            <option value="name-asc">文件名（正序）</option>
+                            <option value="name-desc">文件名（倒序）</option>
+                        </select>
+                    </label>
+                </div>
                 <div id="md-file-list"></div>
                 <p id="file-list-empty" style="display:none;color:#999;">暂无 Markdown 文件</p>
             </div>
@@ -60,7 +71,9 @@
     var filenameEl = document.getElementById('reader-filename');
     var fileListContainer = document.getElementById('md-file-list');
     var emptyEl = document.getElementById('file-list-empty');
+    var sortEl = document.getElementById('md-file-sort');
     var copyBtn = document.getElementById('btn-copy');
+    var mdFiles = [];
     var currentBase = '';
     var currentMdText = '';
     var copyTimer = null;
@@ -77,6 +90,61 @@
     function getFileName(path) {
         var parts = path.replace(/\\/g, '/').split('/');
         return parts[parts.length - 1] || path;
+    }
+
+    function formatCreated(ts) {
+        var date = new Date(Number(ts) * 1000);
+        if (isNaN(date.getTime())) return '创建时间未知';
+        return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0')
+            + '-' + String(date.getDate()).padStart(2, '0')
+            + ' ' + String(date.getHours()).padStart(2, '0')
+            + ':' + String(date.getMinutes()).padStart(2, '0');
+    }
+
+    function sortedFiles() {
+        var order = sortEl ? sortEl.value : 'created-desc';
+        return mdFiles.slice().sort(function (a, b) {
+            var nameOrder = a.name.localeCompare(b.name, 'zh-CN', {numeric:true, sensitivity:'base'});
+            if (order === 'name-asc') return nameOrder;
+            if (order === 'name-desc') return -nameOrder;
+
+            var createdOrder = (Number(a.created) || 0) - (Number(b.created) || 0);
+            if (order === 'created-desc') createdOrder = -createdOrder;
+            return createdOrder || nameOrder;
+        });
+    }
+
+    function renderFileList() {
+        fileListContainer.innerHTML = '';
+        if (!mdFiles.length) {
+            show(emptyEl);
+            return;
+        }
+
+        hide(emptyEl);
+        var ul = document.createElement('ul');
+        ul.className = 'md-file-items';
+        sortedFiles().forEach(function (f) {
+            var li = document.createElement('li');
+            var link = document.createElement('a');
+            link.href = '/reader.html?path=' + encodeURIComponent('files/md/' + f.name);
+            link.className = 'md-file-link';
+
+            var nameEl = document.createElement('span');
+            nameEl.className = 'md-file-name';
+            nameEl.textContent = f.name;
+            link.appendChild(nameEl);
+
+            var timeEl = document.createElement('time');
+            timeEl.className = 'md-file-created';
+            timeEl.textContent = '创建时间：' + formatCreated(f.created);
+            if (Number(f.created)) timeEl.dateTime = new Date(Number(f.created) * 1000).toISOString();
+            link.appendChild(timeEl);
+
+            li.appendChild(link);
+            ul.appendChild(li);
+        });
+        fileListContainer.appendChild(ul);
     }
 
     // marked 渲染器：相对路径（图片/链接）自动加前缀到当前 md 所在目录
@@ -114,28 +182,10 @@
                 return r.json();
             })
             .then(function (data) {
-                var mdFiles = (data.entries || []).filter(function (e) {
+                mdFiles = (data.entries || []).filter(function (e) {
                     return e.type === 'file' && /\.md$/i.test(e.name);
                 });
-                if (mdFiles.length === 0) {
-                    show(emptyEl);
-                    fileListContainer.innerHTML = '';
-                    return;
-                }
-                hide(emptyEl);
-                var ul = document.createElement('ul');
-                ul.className = 'md-file-items';
-                mdFiles.forEach(function (f) {
-                    var li = document.createElement('li');
-                    var link = document.createElement('a');
-                    link.href = '/reader.html?path=' + encodeURIComponent('files/md/' + f.name);
-                    link.textContent = f.name;
-                    link.className = 'md-file-link';
-                    li.appendChild(link);
-                    ul.appendChild(li);
-                });
-                fileListContainer.innerHTML = '';
-                fileListContainer.appendChild(ul);
+                renderFileList();
             })
             .catch(function (err) {
                 fileListContainer.innerHTML = '<p style="color:#c00;">加载文件列表失败: ' + err.message + '</p>';
@@ -204,6 +254,7 @@
 
     // --- Init ---
     setupReaderRenderer();
+    if (sortEl) sortEl.addEventListener('change', renderFileList);
     var path = getQueryParam('path');
     if (path) {
         renderMarkdown(path);

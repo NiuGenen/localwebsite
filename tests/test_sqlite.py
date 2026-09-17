@@ -7,6 +7,7 @@ import sqlite3
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -670,6 +671,25 @@ class SQLiteTests(unittest.TestCase):
         finally:
             db.close()
         self.assertEqual(len(self.records('todos')), 1)
+
+    def test_file_list_includes_created_time(self):
+        upload = self.root / 'uploads'
+        (upload / 'md').mkdir(parents=True)
+        (upload / 'md' / 'reader.md').write_text('# Reader')
+        old_upload = backend.UPLOAD_DIR
+        backend.UPLOAD_DIR = str(upload)
+        try:
+            response = self.request('GET', '/api/files?path=md')
+        finally:
+            backend.UPLOAD_DIR = old_upload
+
+        self.assertEqual(response.status_code, 200)
+        entry = response.json['entries'][0]
+        self.assertIsInstance(entry['created'], int)
+        self.assertEqual(
+            backend.file_created_time('unused', SimpleNamespace(st_birthtime=123, st_ctime=456)),
+            123,
+        )
 
     def test_peer_heartbeats_unique_and_cleanup_race(self):
         self.init()

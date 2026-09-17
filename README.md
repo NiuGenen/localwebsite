@@ -10,7 +10,7 @@
 - **Word 在线阅读**：`.doc` / `.docx` 文件在文件浏览（本机与局域网共享）中带有「阅读」按钮，服务端转换为 HTML 后在页内阅读：`.docx` 用 Python 标准库提取（正文/标题/表格/内嵌图片）；`.doc` 用 **LibreOffice**（`soffice`)转换保真排版；结果按内容哈希缓存（`tmp_docs/`，不入库）。
 - **Markdown 图表（Mermaid）**：```mermaid 代码块在本机 Markdown 阅读器、局域网共享阅读弹层与简易阅读器中，由离线 vendored 的 `mermaid.min.js` 渲染为图（支持 `block-beta` 等）；渲染结果以 `data:` 内嵌为 `<img>`，**右键可另存为 SVG**。
 - **简易 Markdown 阅读（客户端）**：首页「简易阅读」卡片进入 `/mdreader.html`，**拖入本地 `.md` 文件**即时渲染阅读（支持文档内标题锚点跳转）；可**导出独立 HTML**（内联样式与图表、相对 `.md` 链接改写为 `.html`，导出后支持文档间相对路径跳转）。纯客户端、无需服务端、对局域网开放。
-- **Markdown 阅读入口可见性**：顶部导航不再提供「Markdown阅读」入口，首页「Markdown 阅读」卡片**仅在 localhost 显示**；仍可直接访问 `/reader.html`，文件浏览中 md 文件的「阅读」按钮不受影响。
+- **Markdown 阅读入口可见性**：顶部导航不再提供「Markdown阅读」入口，首页「Markdown 阅读」卡片**仅在 localhost 显示**；仍可直接访问 `/reader.html`，文件浏览中 md 文件的「阅读」按钮不受影响。文件列表默认按创建时间从新到旧显示，并支持按文件名正/倒序或创建时间新/旧排序。
 - **黑名单目录保护**：`binary-translation` 目录禁止上传、移动、重命名等修改操作（仍可浏览下载）。
 - **Markdown 阅读**：文件列表选择 + Markdown 渲染 + 代码高亮，显示完整文件名；支持**图片渲染**与**相对链接**（图片/链接按当前文档所在目录解析，`[链接](其他.md)` 可在阅读器内直接跳转）；阅读工具栏提供**复制全文**（一键复制原始 Markdown 源码）。
 - **自定义页面**：创建独立的 Markdown 阅读页（标题 + markdown 简介 + 文档清单），组织若干相关文档集中阅读。
@@ -235,7 +235,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/files?path=` | 列出目录内容（含每项 `blocked` 标志） |
+| GET | `/api/files?path=` | 列出目录内容（含每项 `size`、`mtime`、`created`、`blocked` 信息） |
 | GET | `/api/doc?path=` | 将本机 `.doc`/`.docx` 转 HTML（docx 用 stdlib、doc 用 LibreOffice，按内容缓存） |
 | GET | `/api/zip?path=` | 打包下载目录为 zip（不压缩、流式，排除点文件与 index.html） |
 | POST | `/api/upload` | 上传文件（支持多文件） |
