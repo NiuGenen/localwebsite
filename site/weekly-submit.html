@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>提交周报 - 本地文件站</title>
+    <link rel="stylesheet" href="/css/style.css?v=43">
+</head>
+<body>
+<header><h1>本地文件站</h1><nav><a href="/">首页</a><a href="/weekly.html" class="active">每周周报</a><a href="/files/">文件浏览</a></nav></header>
+<main>
+    <section class="pages-intro"><div class="weekly-editor-title-row"><h2 id="editor-title">提交周报</h2><span class="weekly-editor-current-person">当前人员：<strong id="editor-person-name">加载中...</strong></span></div><p id="editor-meta">加载中...</p></section>
+    <div id="editor-fatal" class="weekly-editor-error" style="display:none">
+        <p id="editor-fatal-message"></p>
+        <a class="btn btn-sm" id="editor-fatal-back" href="/weekly.html">返回周报列表</a>
+    </div>
+    <section class="card weekly-editor-card" id="editor-card" style="display:none">
+        <div class="weekly-editor-actions weekly-editor-actions-top">
+            <button type="button" class="btn" data-editor-back>返回周报</button>
+            <button type="button" class="btn btn-success weekly-editor-save" data-editor-save disabled>保存</button>
+        </div>
+
+        <p id="editor-hint" class="weekly-editor-form-hint" aria-live="polite" hidden></p>
+        <div id="editor-fields"></div>
+
+        <div class="weekly-editor-actions weekly-editor-actions-bottom">
+            <button type="button" class="btn" data-editor-back>返回周报</button>
+            <button type="button" class="btn btn-success weekly-editor-save" data-editor-save disabled>保存</button>
+        </div>
+    </section>
+</main>
+<footer><p>&copy; 2026 本地文件站</p></footer>
+<script src="/js/layout.js"></script>
+<script src="/js/weekly-submit.js?v=3"></script>
+</body>
+</html>

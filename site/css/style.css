@@ -1541,6 +1541,20 @@ footer {
 
 .weekly-toolbar { display:flex; flex-wrap:wrap; gap:.6rem; margin-bottom:1.25rem; }
 .weekly-toolbar-export { margin-left:auto; }
+.weekly-editor-card { padding-top:1.25rem; }
+.weekly-editor-actions { display:flex; align-items:center; justify-content:space-between; gap:.75rem; }
+.weekly-editor-actions-top { margin-bottom:1rem; }
+.weekly-editor-actions-bottom { margin-top:1.5rem; padding-top:1.25rem; border-top:1px solid #eee; }
+.weekly-editor-save { min-width:5.5rem; }
+.weekly-editor-title-row { display:flex; align-items:baseline; flex-wrap:wrap; gap:.5rem .75rem; margin-bottom:.5rem; }
+.weekly-editor-title-row h2 { margin:0; }
+.weekly-editor-current-person { color:#7f8c8d; font-size:.95rem; }
+.weekly-editor-current-person strong { color:#2c3e50; }
+.weekly-editor-form-hint { margin:0 0 1rem; color:#999; font-size:.85rem; }
+.weekly-editor-form-hint[hidden] { display:none; }
+.weekly-editor-card .weekly-field:first-child { margin-top:0; }
+.weekly-editor-error { margin-bottom:1.25rem; padding:.75rem .9rem; border:1px solid #f5b7b1; border-radius:6px; background:#fdf0ee; color:#c0392b; line-height:1.6; }
+.weekly-editor-error .btn { margin-top:.65rem; }
 .weekly-script-tip { background:#eef7ff; border:1px solid #c9e3f7; border-left:4px solid #2980b9; border-radius:8px; padding:1.1rem 1.25rem; margin-bottom:1.25rem; }
 .weekly-script-help summary { cursor:pointer; color:#2c3e50; font-size:1.05rem; font-weight:600; list-style:none; outline:none; user-select:none; }
 .weekly-script-help summary::-webkit-details-marker { display:none; }
@@ -1564,7 +1578,7 @@ footer {
 .weekly-field-status[hidden] { display:none; }
 .weekly-field-toggle { flex-shrink:0; }
 .weekly-field-editor[hidden] { display:none; }
-.weekly-field textarea { display:block; box-sizing:border-box; width:100%; min-height:90px; margin-top:.3rem; padding:.6rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; resize:vertical; }
+.weekly-field textarea { display:block; box-sizing:border-box; width:100%; min-height:180px; margin-top:.3rem; padding:.75rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; font-weight:400; line-height:1.6; resize:vertical; }
 .weekly-conflict-hint { padding:.65rem .75rem; border:1px solid #e74c3c; border-radius:5px; background:#fdf0ee; color:#c0392b; font-weight:600; line-height:1.5; }
 .weekly-project-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
 .weekly-project-row::first-line { flex:1; }
@@ -1593,6 +1607,11 @@ footer {
 .weekly-page-info { min-width:3.5rem; color:#666; font-size:.9rem; font-variant-numeric:tabular-nums; text-align:center; }
 .weekly-pages-head { justify-content:flex-start; flex-wrap:wrap; column-gap:1.5rem; row-gap:.75rem; }
 .weekly-head-actions { display:flex; align-items:center; flex-wrap:wrap; gap:.5rem; margin-left:auto; }
+
+@media (max-width:600px) {
+    .weekly-editor-actions .btn { flex:1; }
+    .weekly-editor-title-row { align-items:flex-start; flex-direction:column; gap:.15rem; }
+}
 
 .card-pinned p {
     display: -webkit-box;
