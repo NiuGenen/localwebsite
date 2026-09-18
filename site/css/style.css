@@ -362,19 +362,22 @@ footer {
 #reader-toolbar {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 1rem;
     margin-bottom: 1.5rem;
     padding-bottom: 1rem;
     border-bottom: 1px solid #eee;
 }
 #reader-filename {
+    flex: 1;
+    min-width: 12rem;
     font-size: 1.1rem;
     font-weight: 600;
     color: #2c3e50;
     word-break: break-all;
 }
 .btn-copy {
-    margin-left: auto;
+    margin-left: 0;
 }
 
 /* Markdown rendered content */

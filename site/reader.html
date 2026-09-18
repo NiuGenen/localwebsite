@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Markdown 阅读器</title>
-    <link rel="stylesheet" href="/css/style.css?v=40">
+    <link rel="stylesheet" href="/css/style.css?v=48">
     <link rel="stylesheet" href="/js/github.min.css" id="hljs-theme">
 </head>
 <body>
@@ -40,6 +40,7 @@
                 <div id="reader-toolbar">
                     <a href="/reader.html" class="btn" id="btn-back">← 文件列表</a>
                     <span id="reader-filename"></span>
+                    <button type="button" class="btn btn-sm btn-success" id="btn-export">导出 HTML</button>
                     <button type="button" class="btn btn-sm btn-copy" id="btn-copy">复制全文</button>
                 </div>
                 <div id="reader-content"></div>
@@ -73,9 +74,12 @@
     var emptyEl = document.getElementById('file-list-empty');
     var sortEl = document.getElementById('md-file-sort');
     var copyBtn = document.getElementById('btn-copy');
+    var exportBtn = document.getElementById('btn-export');
     var mdFiles = [];
     var currentBase = '';
     var currentMdText = '';
+    var currentMdName = '';
+    var diagramPromise = Promise.resolve();
     var copyTimer = null;
 
     function show(el) { if (el) el.style.display = ''; }
@@ -90,6 +94,102 @@
     function getFileName(path) {
         var parts = path.replace(/\\/g, '/').split('/');
         return parts[parts.length - 1] || path;
+    }
+
+    function escHtml(s) {
+        var d = document.createElement('div');
+        d.appendChild(document.createTextNode(s));
+        return d.innerHTML;
+    }
+
+    function relativePath(baseDir, target) {
+        var from = baseDir.split('/').filter(Boolean);
+        var to = target.split('/').filter(Boolean);
+        while (from.length && to.length && from[0] === to[0]) {
+            from.shift();
+            to.shift();
+        }
+        return '../'.repeat(from.length) + to.join('/');
+    }
+
+    var EXPORT_CSS =
+        'body{margin:0;background:#f5f5f5;color:#333;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;line-height:1.75;}' +
+        '.mdpage{max-width:880px;margin:24px auto;background:#fff;padding:24px 36px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.08);word-break:break-word;}' +
+        'h1,h2,h3,h4,h5,h6{color:#2c3e50;line-height:1.35;}' +
+        'h1{font-size:1.8em;border-bottom:2px solid #eee;padding-bottom:.3em;}' +
+        'h2{font-size:1.5em;border-bottom:1px solid #eee;padding-bottom:.2em;}' +
+        'a{color:#3498db;}img{max-width:100%;height:auto;}' +
+        '.mermaid-img{display:block;max-width:100%;height:auto;margin:1em auto;background:#fff;}' +
+        'table{border-collapse:collapse;margin:1em 0;}' +
+        'th,td{border:1px solid #ddd;padding:.5em .8em;text-align:left;}' +
+        'th{background:#f6f8fa;}' +
+        'blockquote{margin:1em 0;padding:.5em 1em;border-left:4px solid #3498db;background:#f8fafc;color:#555;}' +
+        'pre{background:#f6f8fa;border:1px solid #e1e4e8;border-radius:6px;padding:1em;overflow-x:auto;}' +
+        'code{background:#f0f0f0;padding:.15em .4em;border-radius:3px;font-family:"Fira Code",Menlo,Consolas,monospace;font-size:.88em;}' +
+        'pre code{background:none;padding:0;}' +
+        'hr{border:none;border-top:1px solid #eee;margin:1.5em 0;}' +
+        '.hljs{color:#24292e;background:transparent}' +
+        '.hljs-comment,.hljs-quote{color:#6a737d;font-style:italic}' +
+        '.hljs-keyword,.hljs-selector-tag,.hljs-subst{color:#d73a49}' +
+        '.hljs-number,.hljs-literal,.hljs-variable,.hljs-template-variable,.hljs-tag .hljs-attr{color:#005cc5}' +
+        '.hljs-string,.hljs-doctag,.hljs-regexp{color:#032f62}' +
+        '.hljs-title,.hljs-section,.hljs-selector-id{color:#6f42c1;font-weight:600}' +
+        '.hljs-type,.hljs-class .hljs-title{color:#e36209}' +
+        '.hljs-attribute,.hljs-name{color:#6f42c1}' +
+        '.hljs-built_in,.hljs-symbol,.hljs-bullet{color:#e36209}' +
+        '.hljs-meta{color:#6a737d}' +
+        '.hljs-emphasis{font-style:italic}' +
+        '.hljs-strong{font-weight:600}';
+
+    function rewriteExportUrls(root) {
+        root.querySelectorAll('[href],[src]').forEach(function (el) {
+            ['href', 'src'].forEach(function (attr) {
+                var value = el.getAttribute(attr);
+                if (!value || /^(https?:)?\/\//i.test(value) || /^(data|mailto|tel):/i.test(value)
+                        || value.charAt(0) === '#') return;
+
+                var parts = value.match(/^([^?#]*)([?#].*)?$/);
+                var path = parts ? parts[1] : value;
+                var suffix = parts && parts[2] ? parts[2] : '';
+                if (attr === 'href' && /\.md$/i.test(path)) {
+                    path = path.replace(/\.md$/i, '.html');
+                }
+                if (path.charAt(0) === '/' && path.indexOf('/files/') === 0) {
+                    el.setAttribute(attr, relativePath(currentBase, path.slice(1)) + suffix);
+                } else if (attr === 'href' && /\.md$/i.test(path) && path.charAt(0) !== '/') {
+                    el.setAttribute(attr, path.replace(/\.md$/i, '.html') + suffix);
+                }
+            });
+        });
+    }
+
+    function downloadHtml(fullHtml, name) {
+        var blob = new Blob([fullHtml], {type:'text/html;charset=utf-8'});
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function exportHtml() {
+        if (!currentMdText) return;
+        var base = (currentMdName || 'export').replace(/\.(md|markdown)$/i, '');
+        var doExport = function () {
+            var holder = document.createElement('div');
+            holder.innerHTML = contentEl.innerHTML;
+            rewriteExportUrls(holder);
+            var full = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8">\n'
+                + '<meta name="viewport" content="width=device-width,initial-scale=1">\n'
+                + '<title>' + escHtml(currentMdName) + '</title>\n'
+                + '<style>' + EXPORT_CSS + '</style>\n</head>\n<body>\n'
+                + '<main class="mdpage">' + holder.innerHTML + '</main>\n</body>\n</html>';
+            downloadHtml(full, base + '.html');
+        };
+        (diagramPromise || Promise.resolve()).then(doExport).catch(doExport);
     }
 
     function formatCreated(ts) {
@@ -213,12 +313,13 @@
                 show(readingViewEl);
                 filenameEl.textContent = getFileName(path);
                 currentMdText = mdText;
+                currentMdName = getFileName(path);
 
                 contentEl.innerHTML = marked.parse(mdText);
                 contentEl.querySelectorAll('pre code').forEach(function (block) {
                     hljs.highlightElement(block);
                 });
-                if (window.renderMermaidIn) renderMermaidIn(contentEl);
+                diagramPromise = window.renderMermaidIn ? renderMermaidIn(contentEl) : Promise.resolve();
             })
             .catch(function (err) {
                 hide(loadingEl);
@@ -254,6 +355,7 @@
 
     // --- Init ---
     setupReaderRenderer();
+    if (exportBtn) exportBtn.addEventListener('click', exportHtml);
     if (sortEl) sortEl.addEventListener('change', renderFileList);
     var path = getQueryParam('path');
     if (path) {
