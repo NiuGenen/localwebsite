@@ -319,6 +319,7 @@ class SQLiteTests(unittest.TestCase):
             self.assertEqual([item['title'] for item in limited.json],
                              ['第 7 周', '第 6 周', '第 5 周', '第 4 周', '第 3 周'])
             self.assertEqual([item['submission_count'] for item in limited.json], [1, 0, 0, 0, 0])
+            self.assertEqual([item['people_count'] for item in limited.json], [1, 0, 0, 0, 0])
             for value in ('', '0', '-1', 'abc'):
                 response = client.get('/api/weekly?limit=' + value)
                 self.assertEqual(response.status_code, 400)

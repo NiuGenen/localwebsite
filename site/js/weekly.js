@@ -63,7 +63,7 @@
             link.querySelector('.page-entry-title').after(badge);
         }
         link.querySelector('.weekly-submission-count').textContent =
-            '已提交人数：' + report.submission_count;
+            '已提交人数：' + report.submission_count + '/' + report.people_count;
         row.appendChild(link);
 
         if (create.style.display !== 'none') {
