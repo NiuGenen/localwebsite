@@ -1570,7 +1570,36 @@ footer {
 .weekly-section { border-top:3px solid #3498db; padding:1rem 0; }
 .weekly-section h3 { color:#2c3e50; margin-bottom:.75rem; }
 .weekly-section h4 { color:#16a085; margin: .75rem 0 .2rem; }
-.weekly-body { white-space:pre-wrap; background:#f8f9fa; padding:.65rem .8rem; border-radius:6px; }
+.weekly-body { background:#f8f9fa; padding:.65rem .8rem; border-radius:6px; }
+.weekly-markdown-body { color:#333; font-size:1rem; font-weight:400; line-height:1.7; overflow-wrap:anywhere; }
+.weekly-markdown-body > :first-child { margin-top:0; }
+.weekly-markdown-body > :last-child { margin-bottom:0; }
+.weekly-markdown-body h1,
+.weekly-markdown-body h2,
+.weekly-markdown-body h3,
+.weekly-markdown-body h4,
+.weekly-markdown-body h5,
+.weekly-markdown-body h6 { color:#2c3e50; line-height:1.35; margin:1.1em 0 .45em; }
+.weekly-markdown-body h4 { font-size:1.05rem; }
+.weekly-markdown-body h5 { font-size:.98rem; }
+.weekly-markdown-body h6 { font-size:.92rem; }
+.weekly-markdown-body p,
+.weekly-markdown-body li { color:#333; font-size:1rem; }
+.weekly-markdown-body p { margin:.65rem 0; }
+.weekly-markdown-body ul,
+.weekly-markdown-body ol { margin:.65rem 0; padding-left:1.6rem; }
+.weekly-markdown-body li { margin:.18rem 0; }
+.weekly-markdown-body blockquote { margin:.75rem 0; padding:.45rem .75rem; border-left:3px solid #3498db; background:#f8fafc; color:#566573; }
+.weekly-markdown-body pre { margin:.75rem 0; padding:.75rem .85rem; border:1px solid #e1e4e8; border-radius:6px; background:#f6f8fa; overflow-x:auto; }
+.weekly-markdown-body code { padding:.12em .35em; border-radius:3px; background:#f0f0f0; font-family:"Fira Code","Cascadia Code",Menlo,monospace; font-size:.88em; }
+.weekly-markdown-body pre code { padding:0; background:none; }
+.weekly-markdown-body table { width:100%; margin:.75rem 0; border-collapse:collapse; }
+.weekly-markdown-body th,
+.weekly-markdown-body td { padding:.45rem .6rem; border:1px solid #ddd; text-align:left; }
+.weekly-markdown-body th { background:#f5f7f9; }
+.weekly-markdown-body img { max-width:100%; height:auto; }
+.weekly-markdown-body a { color:#2980b9; }
+.weekly-markdown-body hr { margin:1rem 0; border:none; border-top:1px solid #ddd; }
 .weekly-field { display:block; margin-top:1rem; color:#2c3e50; font-weight:600; }
 .weekly-field-head { display:flex; align-items:center; gap:.75rem; min-height:2rem; }
 .weekly-field-head label { flex:1; min-width:0; }
@@ -1578,7 +1607,11 @@ footer {
 .weekly-field-status[hidden] { display:none; }
 .weekly-field-toggle { flex-shrink:0; }
 .weekly-field-editor[hidden] { display:none; }
-.weekly-field textarea { display:block; box-sizing:border-box; width:100%; min-height:180px; margin-top:.3rem; padding:.75rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; font-weight:400; line-height:1.6; resize:vertical; }
+.weekly-field textarea { display:block; box-sizing:border-box; width:100%; height:260px; min-height:260px; margin-top:0; padding:.75rem; border:1px solid #ccd4da; border-radius:6px; font:inherit; font-weight:400; line-height:1.6; resize:vertical; }
+.weekly-markdown-editor { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1rem; margin-top:.3rem; }
+.weekly-markdown-pane { min-width:0; }
+.weekly-markdown-pane-label { margin-bottom:.35rem; color:#7f8c8d; font-size:.8rem; font-weight:600; }
+.weekly-markdown-preview { height:260px; min-height:260px; padding:.75rem; border:1px solid #ccd4da; border-radius:6px; background:#fff; overflow:auto; }
 .weekly-conflict-hint { padding:.65rem .75rem; border:1px solid #e74c3c; border-radius:5px; background:#fdf0ee; color:#c0392b; font-weight:600; line-height:1.5; }
 .weekly-project-row { display:flex; align-items:center; gap:.5rem; padding:.5rem 0; border-bottom:1px solid #eee; }
 .weekly-project-row::first-line { flex:1; }
@@ -1611,6 +1644,10 @@ footer {
 @media (max-width:600px) {
     .weekly-editor-actions .btn { flex:1; }
     .weekly-editor-title-row { align-items:flex-start; flex-direction:column; gap:.15rem; }
+}
+
+@media (max-width:800px) {
+    .weekly-markdown-editor { grid-template-columns:minmax(0,1fr); }
 }
 
 .card-pinned p {

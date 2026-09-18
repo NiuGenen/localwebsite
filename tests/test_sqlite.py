@@ -486,6 +486,47 @@ class SQLiteTests(unittest.TestCase):
             self.assertEqual(missing.json['error'], '人员不存在：王五')
             self.assertEqual(client.get('/api/weekly/' + report['id'] + '/export?person=').status_code, 400)
 
+    def test_weekly_markdown_fragment_headings_are_normalized(self):
+        self.init()
+        with backend.app.test_client() as client:
+            local = {'X-Real-IP': '127.0.0.1'}
+            report = client.post('/api/weekly', json={
+                'title': '标题层级周报', 'week_start': '2026-09-07', 'week_end': '2026-09-13'
+            }, headers=local).json
+            detail = client.post('/api/weekly/' + report['id'] + '/projects', json={
+                'name': '研发', 'required': False
+            }, headers=local).json
+            project_id = detail['projects'][0]['id']
+            person = self.add_weekly_person(client, report['id'], '张三', local)
+            source = '# 一级\n## 二级\n### 三级\n\n```text\n# 代码标题\n```\n\nSetext\n---'
+            saved = client.post('/api/weekly/' + report['id'] + '/submissions', json={
+                'person_id': person['id'], 'contents': {project_id: source}
+            })
+            self.assertEqual(saved.status_code, 200, saved.json)
+            normalized = saved.json['contents'][project_id]
+            self.assertEqual(
+                normalized,
+                '#### 一级\n##### 二级\n###### 三级\n\n```text\n# 代码标题\n```\n\n##### Setext',
+            )
+            self.assertEqual(backend.normalize_weekly_markdown(normalized), normalized)
+
+            exported = client.get('/api/weekly/' + report['id'] + '/export').get_data(as_text=True)
+            self.assertTrue(exported.startswith('# 标题层级周报\n'))
+            self.assertNotIn('\n# 一级', exported)
+            self.assertIn('#### 一级', exported)
+            self.assertIn('```text\n# 代码标题\n```', exported)
+
+            self.assertEqual(client.delete('/api/weekly/' + report['id'], headers=local).status_code, 200)
+            imported = client.post('/api/weekly/import', data={
+                'file': (io.BytesIO(exported.encode('utf-8')), 'headings.md')
+            }, headers=local, content_type='multipart/form-data')
+            self.assertEqual(imported.status_code, 201, imported.json)
+            restored_project = next(p for p in imported.json['projects'] if p['name'] == '研发')
+            self.assertEqual(
+                imported.json['submissions'][0]['contents'][restored_project['id']],
+                normalized,
+            )
+
     def test_weekly_markdown_import_applies_defaults_and_fills_required_projects(self):
         self.init()
         with backend.app.test_client() as client:

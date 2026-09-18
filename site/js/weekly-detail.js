@@ -184,8 +184,8 @@
                         var name = document.createElement('h4');
                         name.textContent = submission.person_name;
                         var body = document.createElement('div');
-                        body.className = 'weekly-body';
-                        body.textContent = value;
+                        body.className = 'weekly-body weekly-markdown-body';
+                        body.innerHTML = window.WeeklyMarkdown.render(value);
                         section.append(name, body);
                     }
                 });
@@ -204,8 +204,8 @@
                     var name = document.createElement('h4');
                     name.textContent = project.name;
                     var body = document.createElement('div');
-                    body.className = 'weekly-body';
-                    body.textContent = value;
+                    body.className = 'weekly-body weekly-markdown-body';
+                    body.innerHTML = window.WeeklyMarkdown.render(value);
                     section.append(name, body);
                 });
                 content.appendChild(section);

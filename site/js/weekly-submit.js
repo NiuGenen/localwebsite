@@ -89,6 +89,11 @@
             var label = document.createElement('label');
             var textarea = document.createElement('textarea');
             var editor = document.createElement('div');
+            var inputPane = document.createElement('div');
+            var previewPane = document.createElement('div');
+            var inputLabel = document.createElement('div');
+            var previewLabel = document.createElement('div');
+            var preview = document.createElement('div');
             var textareaId = 'weekly-project-' + project.id;
 
             field.className = 'weekly-field';
@@ -99,9 +104,34 @@
             textarea.value = value;
             textarea.dataset.id = project.id;
             if (project.required) textarea.setAttribute('aria-required', 'true');
-            editor.className = 'weekly-field-editor';
+            editor.className = 'weekly-field-editor weekly-markdown-editor';
             editor.hidden = !expanded;
+            inputPane.className = 'weekly-markdown-pane';
+            previewPane.className = 'weekly-markdown-pane';
+            inputLabel.className = 'weekly-markdown-pane-label';
+            previewLabel.className = 'weekly-markdown-pane-label';
+            inputLabel.textContent = 'Markdown';
+            previewLabel.textContent = '预览';
+            preview.className = 'weekly-markdown-preview weekly-markdown-body';
+            preview.innerHTML = window.WeeklyMarkdown.render(value);
             heading.appendChild(label);
+
+            var updateStatus = function () {};
+            var previewTimer = null;
+            var updatePreview = function () {
+                preview.innerHTML = window.WeeklyMarkdown.render(textarea.value);
+            };
+            var syncPreviewHeight = function () {
+                if (editor.hidden) return;
+                var height = textarea.getBoundingClientRect().height;
+                if (height > 0) preview.style.height = height + 'px';
+            };
+            var handleInput = function () {
+                updateStatus();
+                markDirty();
+                clearTimeout(previewTimer);
+                previewTimer = setTimeout(updatePreview, 120);
+            };
 
             if (!project.required) {
                 var status = document.createElement('span');
@@ -114,7 +144,7 @@
                 toggle.setAttribute('aria-controls', textareaId);
                 toggle.setAttribute('aria-expanded', String(expanded));
 
-                var updateStatus = function () {
+                updateStatus = function () {
                     status.hidden = !editor.hidden || !textarea.value.trim();
                 };
                 toggle.onclick = function () {
@@ -123,17 +153,28 @@
                     toggle.textContent = willExpand ? '收起' : '填写';
                     toggle.setAttribute('aria-expanded', String(willExpand));
                     updateStatus();
-                    if (willExpand) textarea.focus();
+                    if (willExpand) {
+                        requestAnimationFrame(syncPreviewHeight);
+                        textarea.focus();
+                    }
                 };
-                textarea.addEventListener('input', updateStatus);
                 updateStatus();
                 heading.append(status, toggle);
             }
 
-            textarea.addEventListener('input', markDirty);
-            editor.appendChild(textarea);
+            textarea.addEventListener('input', handleInput);
+            inputPane.append(inputLabel, textarea);
+            previewPane.append(previewLabel, preview);
+            editor.append(inputPane, previewPane);
             field.append(heading, editor);
             fields.appendChild(field);
+            if (window.ResizeObserver) {
+                new ResizeObserver(syncPreviewHeight).observe(textarea);
+            } else {
+                textarea.addEventListener('mouseup', syncPreviewHeight);
+                textarea.addEventListener('touchend', syncPreviewHeight);
+            }
+            requestAnimationFrame(syncPreviewHeight);
         });
     }
 

@@ -1197,6 +1197,67 @@ def require_local():
     return True
 
 # ===== 每周周报 API =====
+WEEKLY_HEADING_RE = re.compile(r'^( {0,3})(#{1,6})(?:[ \t]+(.*)|[ \t]*)$')
+WEEKLY_FENCE_RE = re.compile(r'^ {0,3}(`{3,}|~{3,})')
+WEEKLY_SETEXT_RE = re.compile(r'^ {0,3}(=+|-+)\s*$')
+
+
+def normalize_weekly_markdown(value):
+    """Keep submitted titles below the report/project/person heading levels."""
+    if not isinstance(value, str) or not value:
+        return value
+
+    lines = value.splitlines()
+    headings = []
+    fence_char = None
+    fence_size = 0
+
+    for index, line in enumerate(lines):
+        fence = WEEKLY_FENCE_RE.match(line)
+        if fence_char:
+            marker = fence.group(1) if fence else ""
+            if marker and marker[0] == fence_char and len(marker) >= fence_size:
+                fence_char = None
+                fence_size = 0
+            continue
+        if fence:
+            fence_char = fence.group(1)[0]
+            fence_size = len(fence.group(1))
+            continue
+
+        heading = WEEKLY_HEADING_RE.match(line)
+        if heading:
+            headings.append(("atx", index, None, len(heading.group(2))))
+            continue
+        if index and lines[index - 1].strip() and WEEKLY_SETEXT_RE.match(line):
+            previous = WEEKLY_HEADING_RE.match(lines[index - 1])
+            if not previous:
+                headings.append(("setext", index - 1, index, 1 if line.lstrip().startswith("=") else 2))
+
+    if not headings:
+        return value
+    minimum = min(item[3] for item in headings)
+    if minimum >= 4:
+        return value
+
+    shift = 4 - minimum
+    replacements = {}
+    skipped = set()
+    for kind, start, underline, level in headings:
+        new_level = min(6, level + shift)
+        if kind == "atx":
+            match = WEEKLY_HEADING_RE.match(lines[start])
+            text = match.group(3) or ""
+            replacements[start] = match.group(1) + ("#" * new_level) + " " + text
+        else:
+            replacements[start] = "#" * new_level + " " + lines[start].strip()
+            skipped.add(underline)
+
+    result = [replacements.get(index, line) for index, line in enumerate(lines) if index not in skipped]
+    suffix = "\n" if value.endswith("\n") else ""
+    return "\n".join(result) + suffix
+
+
 def parse_weekly_markdown(text):
     lines = text.splitlines()
     index = 0
@@ -1389,7 +1450,10 @@ def weekly_detail(report_id):
         "WHERE s.report_id=? ORDER BY p.name COLLATE NOCASE,p.seq", (report_id,)
     ):
         item = dict(r)
-        item["contents"] = json.loads(item["contents"] or "{}")
+        item["contents"] = {
+            project_id: normalize_weekly_markdown(value) if isinstance(value, str) else value
+            for project_id, value in json.loads(item["contents"] or "{}").items()
+        }
         submissions.append(item)
     report["projects"] = projects
     report["people"] = people
@@ -1536,7 +1600,9 @@ def api_weekly_import():
             contents = {}
             for project_name, project in projects.items():
                 value = imported_by_project.get(project_name, {}).get("contents", {}).get(person, "")
-                contents[project["id"]] = value if value.strip() else ("无" if project["required"] else "")
+                contents[project["id"]] = normalize_weekly_markdown(
+                    value if value.strip() else ("无" if project["required"] else "")
+                )
             submission_id = uuid.uuid4().hex
             db.execute(
                 "INSERT INTO weekly_submissions"
@@ -1707,7 +1773,11 @@ def api_weekly_submission_save(report_id):
         value = contents.get(pid, "")
         if not isinstance(value, str): return jsonify({"error": "项目内容格式无效"}), 400
         if project["required"] and not value.strip(): return jsonify({"error": "请填写必填项目：" + project["name"]}), 400
-    contents = {pid: contents.get(pid, "") for pid in allowed}; encoded = json.dumps(contents, ensure_ascii=False); now = int(time.time())
+    contents = {
+        pid: normalize_weekly_markdown(contents.get(pid, ""))
+        for pid in allowed
+    }
+    encoded = json.dumps(contents, ensure_ascii=False); now = int(time.time())
     if submission_id is not None:
         if not isinstance(submission_id, str) or type(expected_revision) is not int or expected_revision < 1:
             return jsonify({"error": "提交版本无效，请重新加载后再保存"}), 409
