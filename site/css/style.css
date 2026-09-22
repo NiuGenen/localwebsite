@@ -736,6 +736,12 @@ footer {
     box-shadow: 0 0 0 2px rgba(52,152,219,0.15);
 }
 
+.fb-modal-message {
+    margin: .2rem 0 .8rem;
+    color: #444;
+    line-height: 1.65;
+}
+
 .fb-modal-hint {
     margin: 0.5rem 0 0;
     font-size: 0.85rem;
@@ -881,13 +887,14 @@ footer {
     white-space: nowrap;
 }
 .fb-col-op {
-    width: 7.5rem;
+    width: 10rem;
     text-align: center;
     white-space: nowrap;
 }
 
 .fb-cut-btn,
 .fb-rename-btn,
+.fb-delete-btn,
 .fb-read-btn {
     background: none;
     border: 1px solid #ccc;
@@ -915,6 +922,11 @@ footer {
     color: #3498db;
     border-color: #3498db;
 }
+.fb-delete-btn:hover {
+    background: #fdedec;
+    color: #e74c3c;
+    border-color: #e74c3c;
+}
 .fb-read-btn:hover {
     background: #f0faf7;
     color: #16a085;
@@ -924,7 +936,9 @@ footer {
 .fb-cut-btn:disabled,
 .fb-cut-btn[disabled],
 .fb-rename-btn:disabled,
-.fb-rename-btn[disabled] {
+.fb-rename-btn[disabled],
+.fb-delete-btn:disabled,
+.fb-delete-btn[disabled] {
     color: #bbb;
     border-color: #eee;
     background: none;

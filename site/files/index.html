@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>文件浏览 - 本地文件站</title>
-    <link rel="stylesheet" href="/css/style.css?v=11">
+    <link rel="stylesheet" href="/css/style.css?v=49">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
 </head>
 <body>
@@ -68,6 +68,7 @@
         <div class="fb-modal">
             <h3 class="fb-modal-title" id="fb-modal-title">新建文件夹</h3>
             <input type="text" id="fb-modal-input" class="fb-modal-input" placeholder="输入文件夹名称">
+            <p class="fb-modal-message" id="fb-modal-message" style="display:none"></p>
             <p class="fb-modal-hint" id="fb-modal-hint"></p>
             <div class="fb-modal-actions">
                 <button type="button" class="btn" id="fb-modal-cancel">取消</button>
@@ -93,6 +94,7 @@
     var modal = document.getElementById('fb-modal');
     var modalTitle = document.getElementById('fb-modal-title');
     var modalInput = document.getElementById('fb-modal-input');
+    var modalMessage = document.getElementById('fb-modal-message');
     var modalHint = document.getElementById('fb-modal-hint');
     var modalConfirm = document.getElementById('fb-modal-confirm');
     var modalCancel = document.getElementById('fb-modal-cancel');
@@ -103,6 +105,7 @@
     var cutItem = null;
     var modalMode = 'mkdir';
     var renameTarget = null;
+    var deleteTarget = null;
 
     function getPath() {
         var h = window.location.hash.replace(/^#\/*/, '');
@@ -278,6 +281,18 @@
             });
             opTd.appendChild(cutBtn);
         }
+        var deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'fb-delete-btn';
+        deleteBtn.title = entry.type === 'dir'
+            ? '删除文件夹（移入回收站）'
+            : '删除文件（移入回收站）';
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.disabled = opDisabled;
+        deleteBtn.addEventListener('click', function () {
+            openDeleteModal(tr, entry, path);
+        });
+        opTd.appendChild(deleteBtn);
         tr.appendChild(opTd);
         tr.dataset.name = entry.name;
 
@@ -501,19 +516,41 @@
         xhr.send(fd);
     });
 
-    // ===== 弹窗（新建文件夹 / 重命名）=====
+    // ===== 弹窗（新建文件夹 / 重命名 / 删除）=====
     function openModal(mode, prefill, target) {
         modalMode = mode;
-        renameTarget = target || null;
-        modalTitle.textContent = mode === 'rename' ? '重命名' : '新建文件夹';
-        modalInput.placeholder = mode === 'rename' ? '输入新名称' : '输入文件夹名称';
-        modalInput.value = prefill || '';
-        modalConfirm.textContent = mode === 'rename' ? '保存' : '创建';
+        renameTarget = mode === 'rename' ? (target || null) : null;
+        deleteTarget = mode === 'delete' ? (target || null) : null;
         modalHint.textContent = '';
         modalHint.className = 'fb-modal-hint';
+
+        if (mode === 'delete') {
+            modalTitle.textContent = target.type === 'dir' ? '删除文件夹' : '删除文件';
+            modalInput.style.display = 'none';
+            modalMessage.textContent = target.type === 'dir'
+                ? '确定将文件夹「' + target.name + '」及其全部内容移入回收站？'
+                : '确定将文件「' + target.name + '」移入回收站？';
+            modalMessage.style.display = '';
+            modalConfirm.className = 'btn btn-danger';
+            modalConfirm.textContent = '移入回收站';
+        } else {
+            modalTitle.textContent = mode === 'rename' ? '重命名' : '新建文件夹';
+            modalInput.style.display = '';
+            modalInput.placeholder = mode === 'rename' ? '输入新名称' : '输入文件夹名称';
+            modalInput.value = prefill || '';
+            modalMessage.textContent = '';
+            modalMessage.style.display = 'none';
+            modalConfirm.className = 'btn btn-success';
+            modalConfirm.textContent = mode === 'rename' ? '保存' : '创建';
+        }
+
         modal.style.display = 'flex';
-        modalInput.focus();
-        if (prefill) {
+        if (mode === 'delete') {
+            modalConfirm.focus();
+        } else {
+            modalInput.focus();
+        }
+        if (mode !== 'delete' && prefill) {
             modalInput.setSelectionRange(0, prefill.lastIndexOf('.') > 0 ? prefill.lastIndexOf('.') : prefill.length);
         }
     }
@@ -525,6 +562,16 @@
     function openRenameModal(tr, entry, path) {
         if (tr.querySelector('.fb-rename-btn').disabled) return;
         openModal('rename', entry.name, { path: (path ? path + '/' : '') + entry.name, name: entry.name });
+    }
+
+    function openDeleteModal(tr, entry, path) {
+        var button = tr.querySelector('.fb-delete-btn');
+        if (!button || button.disabled) return;
+        openModal('delete', '', {
+            path: (path ? path + '/' : '') + entry.name,
+            name: entry.name,
+            type: entry.type
+        });
     }
 
     function doMkdir() {
@@ -609,9 +656,54 @@
             });
     }
 
+    function doDelete() {
+        if (!deleteTarget) return;
+        modalConfirm.disabled = true;
+        modalConfirm.textContent = '移入中...';
+        modalHint.textContent = '';
+
+        fetch('/api/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path: deleteTarget.path })
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    return { ok: r.ok, data: data };
+                });
+            })
+            .then(function (res) {
+                if (res.ok) {
+                    if (cutItem && (cutItem.path === deleteTarget.path
+                            || cutItem.path.indexOf(deleteTarget.path + '/') === 0)) {
+                        cutItem = null;
+                    }
+                    var name = deleteTarget.name;
+                    closeModal();
+                    showMsg('已删除: ' + name + '（已移入回收站）', false);
+                    loadDir(currentPath);
+                } else {
+                    modalHint.textContent = res.data.error || '删除失败';
+                    modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+                }
+            })
+            .catch(function () {
+                modalHint.textContent = '网络错误';
+                modalHint.className = 'fb-modal-hint fb-modal-hint-err';
+            })
+            .finally(function () {
+                modalConfirm.disabled = false;
+                if (modalMode === 'delete') {
+                    modalConfirm.textContent = '移入回收站';
+                }
+            });
+    }
+
     function doModalConfirm() {
         if (modalMode === 'rename') {
             doRename();
+        } else if (modalMode === 'delete') {
+            doDelete();
         } else {
             doMkdir();
         }
@@ -632,6 +724,9 @@
     modalInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter') { e.preventDefault(); doModalConfirm(); }
         if (e.key === 'Escape') { closeModal(); }
+    });
+    modal.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') closeModal();
     });
     modal.addEventListener('click', function (e) {
         if (e.target === modal) closeModal();

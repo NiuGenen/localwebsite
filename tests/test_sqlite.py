@@ -733,6 +733,60 @@ class SQLiteTests(unittest.TestCase):
             123,
         )
 
+    def test_file_delete_moves_to_collision_safe_trash(self):
+        upload = self.root / 'uploads'
+        trash = self.root / 'trash'
+        (upload / 'docs').mkdir(parents=True)
+        (upload / 'binary-translation').mkdir()
+        (upload / 'folder').mkdir()
+        (upload / 'folder' / 'inside.txt').write_text('folder content')
+        (upload / 'docs' / 'report.md').write_text('first')
+        (upload / 'binary-translation' / 'protected.md').write_text('protected')
+        (upload / 'index.html').write_text('index')
+        (upload / 'target.md').write_text('target')
+        (upload / 'link.md').symlink_to(upload / 'target.md')
+        (upload / 'linkdir').symlink_to(upload / 'docs', target_is_directory=True)
+
+        old_upload = backend.UPLOAD_DIR
+        old_trash = backend.TRASH_DIR
+        backend.UPLOAD_DIR = str(upload)
+        backend.TRASH_DIR = str(trash)
+        try:
+            with patch.object(backend.time, 'strftime', return_value='20260922-153012'):
+                first = self.request('POST', '/api/delete', {'path': 'docs/report.md'})
+                (upload / 'docs' / 'report.md').write_text('second')
+                second = self.request('POST', '/api/delete', {'path': 'docs/report.md'})
+                folder_first = self.request('POST', '/api/delete', {'path': 'folder'})
+                (upload / 'folder').mkdir()
+                (upload / 'folder' / 'inside.txt').write_text('folder content 2')
+                folder_second = self.request('POST', '/api/delete', {'path': 'folder'})
+
+            self.assertEqual(first.status_code, 200, first.json)
+            self.assertEqual(first.json['trashed'], 'docs/report_20260922-153012.md')
+            self.assertEqual(second.status_code, 200, second.json)
+            self.assertEqual(second.json['trashed'], 'docs/report_20260922-153012_1.md')
+            self.assertFalse((upload / 'docs' / 'report.md').exists())
+            self.assertEqual((trash / first.json['trashed']).read_text(), 'first')
+            self.assertEqual((trash / second.json['trashed']).read_text(), 'second')
+            self.assertEqual(folder_first.status_code, 200, folder_first.json)
+            self.assertEqual(folder_first.json['trashed'], 'folder_20260922-153012')
+            self.assertEqual(folder_second.status_code, 200, folder_second.json)
+            self.assertEqual(folder_second.json['trashed'], 'folder_20260922-153012_1')
+            self.assertEqual((trash / folder_first.json['trashed'] / 'inside.txt').read_text(), 'folder content')
+            self.assertEqual((trash / folder_second.json['trashed'] / 'inside.txt').read_text(), 'folder content 2')
+
+            self.assertEqual(self.request('POST', '/api/delete', {'path': 'link.md'}).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/delete', {'path': 'linkdir'}).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/delete', {'path': 'index.html'}).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/delete', {
+                'path': 'binary-translation/protected.md'
+            }).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/delete', {'path': '../app.db'}).status_code, 400)
+            self.assertEqual(self.request('POST', '/api/delete', {'path': 'missing.md'}).status_code, 404)
+        finally:
+            backend.UPLOAD_DIR = old_upload
+            backend.TRASH_DIR = old_trash
+
     def test_peer_heartbeats_unique_and_cleanup_race(self):
         self.init()
         payload = {'secret': backend.PEER_SECRET, 'name': '节点', 'host': '127.0.0.1', 'port': 9000}

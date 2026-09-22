@@ -20,6 +20,8 @@ app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 1 * 1024 * 1024 * 1024  # 上传上限 1GB，与 nginx client_max_body_size 对齐
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "site", "files")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+TRASH_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "trash")
+os.makedirs(TRASH_DIR, exist_ok=True)
 
 # ===== 本机访问判定（仅回环地址）=====
 LOCAL_IPS = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
@@ -415,6 +417,61 @@ def api_rename():
         return jsonify({"success": True, "old": path, "new": new_rel})
     except Exception as e:
         return jsonify({"error": f"重命名失败: {e}"}), 500
+
+
+def trash_destination(rel_path, is_dir=False, timestamp=None):
+    """Return a collision-free target path while preserving the source path."""
+    parent, filename = os.path.split(rel_path)
+    stem, ext = (filename, "") if is_dir else os.path.splitext(filename)
+    stamp = timestamp or time.strftime("%Y%m%d-%H%M%S")
+    candidate_name = f"{stem}_{stamp}{ext}"
+    candidate_rel = os.path.join(parent, candidate_name)
+    candidate = safe_join_soft(TRASH_DIR, candidate_rel)
+    suffix = 1
+    while candidate and os.path.lexists(candidate):
+        candidate_name = f"{stem}_{stamp}_{suffix}{ext}"
+        candidate_rel = os.path.join(parent, candidate_name)
+        candidate = safe_join_soft(TRASH_DIR, candidate_rel)
+        suffix += 1
+    return candidate, candidate_rel
+
+
+@app.route("/api/delete", methods=["POST"])
+def api_delete_entry():
+    data = request.get_json(silent=True) or {}
+    path = (data.get("path") or "").strip().strip("/")
+    if not path:
+        return jsonify({"error": "文件或文件夹路径不能为空"}), 400
+
+    src = safe_join_soft(UPLOAD_DIR, path)
+    if not src or src == UPLOAD_DIR:
+        return jsonify({"error": "无效的文件路径"}), 400
+    if os.path.islink(src):
+        return jsonify({"error": "不能删除符号链接"}), 403
+    is_dir = os.path.isdir(src)
+    if not is_dir and not os.path.isfile(src):
+        return jsonify({"error": "文件或文件夹不存在"}), 404
+
+    rel_src = os.path.relpath(src, UPLOAD_DIR)
+    if is_blocked(rel_src):
+        return jsonify({"error": "该目录不允许删除内容"}), 403
+    if not is_dir and os.path.basename(src) == "index.html":
+        return jsonify({"error": "该文件不允许删除"}), 403
+
+    dest, dest_rel = trash_destination(rel_src, is_dir=is_dir)
+    if not dest:
+        return jsonify({"error": "无效的回收站路径"}), 400
+    try:
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        shutil.move(src, dest)
+        return jsonify({
+            "success": True,
+            "name": os.path.basename(src),
+            "type": "dir" if is_dir else "file",
+            "trashed": dest_rel.replace(os.sep, "/"),
+        })
+    except Exception as e:
+        return jsonify({"error": f"移入回收站失败: {e}"}), 500
 
 # ===== 本机判定 API =====
 
