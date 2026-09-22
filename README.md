@@ -6,6 +6,7 @@
 
 - **文件浏览**：自定义文件浏览器（替代 Nginx autoindex），解决中文文件名对齐问题，支持完整长文件名显示与响应式布局。
 - **文件操作**：多文件上传（带实时进度条，上传上限由 nginx `client_max_body_size` 控制，默认 1GB）、新建文件夹、剪切/粘贴移动文件、重命名（文件与文件夹均可）、文件或文件夹软删除到站点外 `trash/` 回收站、**文件夹一键打包下载**（`/api/zip`，不压缩、流式下发，排除点文件与 `index.html`）。
+- **文件保护**：localhost 可对文件或文件夹添加/取消动态保护；保护会继承到整个文件夹子树，局域网用户不能对受保护内容移动、重命名或软删除，但仍可在受保护文件夹中上传文件和创建文件夹；本机管理员不受该限制。
 - **文件阅读入口**：`md` 文件在文件浏览中带有「阅读」按钮，点击可直接在站内 Markdown 阅读页打开。
 - **Word 在线阅读**：`.doc` / `.docx` 文件在文件浏览（本机与局域网共享）中带有「阅读」按钮，服务端转换为 HTML 后在页内阅读：`.docx` 用 Python 标准库提取（正文/标题/表格/内嵌图片）；`.doc` 用 **LibreOffice**（`soffice`)转换保真排版；结果按内容哈希缓存（`tmp_docs/`，不入库）。
 - **Markdown 图表（Mermaid）**：```mermaid 代码块在本机 Markdown 阅读器、局域网共享阅读弹层与简易阅读器中，由离线 vendored 的 `mermaid.min.js` 渲染为图（支持 `block-beta` 等）；渲染结果以 `data:` 内嵌为 `<img>`，**右键可另存为 SVG**。
@@ -112,7 +113,7 @@
 
 ## SQLite 存储与迁移
 
-六类元数据分别保存在 `todos`、`features`、`temp_notes`、`links`、`peers`、`pages` 表中。上传文件和自定义页面文档仍在文件系统中；API 路径、返回字段和前端使用方式保持兼容。
+六类元数据分别保存在 `todos`、`features`、`temp_notes`、`links`、`peers`、`pages` 表中，动态保护路径保存在 `protected_paths` 表。上传文件和自定义页面文档仍在文件系统中；API 路径、返回字段和前端使用方式保持兼容。
 
 - 每条记录独立存储；保留 ID、原始顺序、时间和额外旧字段。旧待办缺少 `status` 时，按原有 `in_progress` 规则补齐。
 - 每个请求独立连接；修改操作使用 `BEGIN IMMEDIATE` 覆盖读改写，提交或失败回滚。节点地址有唯一约束，过期清理与心跳串行提交。
@@ -237,7 +238,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/api/files?path=` | 列出目录内容（含每项 `size`、`mtime`、`created`、`blocked` 信息） |
+| GET | `/api/files?path=` | 列出目录内容（含每项 `size`、`mtime`、`created`、`blocked` 和动态保护状态） |
 | GET | `/api/doc?path=` | 将本机 `.doc`/`.docx` 转 HTML（docx 用 stdlib、doc 用 LibreOffice，按内容缓存） |
 | GET | `/api/zip?path=` | 打包下载目录为 zip（不压缩、流式，排除点文件与 index.html） |
 | POST | `/api/upload` | 上传文件（支持多文件） |
@@ -245,6 +246,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 | POST | `/api/move` | 移动文件（剪切/粘贴，仅文件） |
 | POST | `/api/rename` | 重命名文件/文件夹 |
 | POST | `/api/delete` | 将单个文件或文件夹软删除到 `trash/`（保留原路径并处理重名） |
+| POST | `/api/protect` | 添加或取消文件/文件夹动态保护（仅本机） |
 | GET | `/api/local` | 本机访问判定 |
 | GET / POST | `/api/pages` | 自定义页面列表 / 创建（写操作仅本机） |
 | PUT / DELETE | `/api/pages/<id>` | 修改标题/简介/pinned / 删除页面（仅本机） |
@@ -300,7 +302,7 @@ python3 weekly.py export --year 2026 --person 张三     # 导出张三在 2026 
 ## 安全与数据
 
 - **路径穿越防护**：`safe_join_soft` 规范化路径并校验前缀，上传文件名经 `basename` 检查。
-- **黑名单保护**：黑名单目录禁止上传、新建、移动、重命名和软删除。
+- **黑名单保护**：静态黑名单目录对所有客户端禁止上传、新建、移动、重命名和软删除；localhost 维护的动态保护阻止局域网修改或移除已有内容，但允许上传文件和创建文件夹。
 - **本机操作限制**：待办、实用功能、自定义网页卡片、自定义页面的创建/编辑/上传/删除/贴首页均由 Flask `is_local_client()`（及 nginx `allow/deny`）限定仅本机；首页自定义网页卡片列表读取对所有局域网访客开放。
 - **节点注册鉴权**：局域网共享节点必须携带 `PEER_SECRET` 注册，否则 403；目录列表转发仅访问注册表中存在的节点（`host/port` 只取自注册表），路径由节点侧再次校验防穿越。
 - **隐藏文件过滤**：点文件（`.` 开头）与 `index.html` 不在文件浏览列表中显示。

@@ -101,6 +101,9 @@
 
     var currentPath = '';
     var currentBlocked = false;
+    var currentProtected = false;
+    var currentProtectionSource = '';
+    var canManageProtection = false;
     var msgTimer = null;
     var cutItem = null;
     var modalMode = 'mkdir';
@@ -242,7 +245,8 @@
             });
             opTd.appendChild(dirDl);
         }
-        var opDisabled = currentBlocked || !!entry.blocked;
+        var protectionDenied = (!!entry.protected || !!entry.contains_protected) && !canManageProtection;
+        var opDisabled = currentBlocked || !!entry.blocked || protectionDenied;
         if (entry.type === 'file' && /\.md$/i.test(entry.name)) {
             var readLink = document.createElement('a');
             readLink.href = '/reader.html?path=' + encodeURIComponent('files/' + (path ? path + '/' : '') + entry.name);
@@ -275,7 +279,7 @@
             cutBtn.className = 'fb-cut-btn';
             cutBtn.title = '剪切此文件';
             cutBtn.innerHTML = '<i class="fas fa-scissors"></i>';
-            cutBtn.disabled = currentBlocked;
+            cutBtn.disabled = opDisabled;
             cutBtn.addEventListener('click', function () {
                 doCut(tr, entry, path);
             });
@@ -293,6 +297,28 @@
             openDeleteModal(tr, entry, path);
         });
         opTd.appendChild(deleteBtn);
+
+        if (canManageProtection) {
+            var protectBtn = document.createElement('button');
+            protectBtn.type = 'button';
+            var lockVisible = entry.blocked || entry.protected || entry.contains_protected;
+            protectBtn.className = 'fb-protect-btn' + (lockVisible ? ' fb-protect-on' : '');
+            protectBtn.title = entry.blocked
+                ? '系统保护目录，不能在页面修改'
+                : (entry.protected_exact
+                    ? '取消保护'
+                    : (entry.protected
+                        ? '已由「' + entry.protection_source + '」保护；点击增加独立保护'
+                        : (entry.contains_protected
+                            ? '包含受保护内容；点击保护整个文件夹'
+                            : '保护此' + (entry.type === 'dir' ? '文件夹' : '文件'))));
+            protectBtn.innerHTML = '<i class="fas ' + (lockVisible ? 'fa-lock' : 'fa-lock-open') + '"></i>';
+            protectBtn.disabled = !!entry.blocked;
+            protectBtn.addEventListener('click', function () {
+                toggleProtection(tr, entry, path);
+            });
+            opTd.appendChild(protectBtn);
+        }
         tr.appendChild(opTd);
         tr.dataset.name = entry.name;
 
@@ -300,13 +326,18 @@
     }
 
     function setButtonsEnabled(enabled) {
+        var protectionDenied = currentProtected && !canManageProtection;
         uploadBtn.disabled = !enabled || currentBlocked;
         mkdirBtn.disabled = !enabled || currentBlocked;
-        pasteBtn.disabled = !enabled || currentBlocked || !cutItem;
+        pasteBtn.disabled = !enabled || currentBlocked || protectionDenied || !cutItem;
         if (currentBlocked && enabled) {
             uploadBtn.title = '当前目录不允许上传';
             mkdirBtn.title = '当前目录不允许新建文件夹';
             pasteBtn.title = '当前目录不允许粘贴';
+        } else if (protectionDenied && enabled) {
+            uploadBtn.title = '上传文件到当前目录';
+            mkdirBtn.title = '在当前目录新建文件夹';
+            pasteBtn.title = '当前文件夹受保护，局域网用户不允许粘贴';
         } else {
             uploadBtn.title = '上传文件到当前目录';
             mkdirBtn.title = '在当前目录新建文件夹';
@@ -369,6 +400,10 @@
 
     function loadDir(path) {
         currentPath = path || '';
+        currentBlocked = false;
+        currentProtected = false;
+        currentProtectionSource = '';
+        canManageProtection = false;
         loading.style.display = '';
         table.style.display = 'none';
         empty.style.display = 'none';
@@ -385,6 +420,9 @@
             .then(function (data) {
                 loading.style.display = 'none';
                 currentBlocked = !!data.blocked;
+                currentProtected = !!data.protected;
+                currentProtectionSource = data.protection_source || '';
+                canManageProtection = !!data.can_manage_protection;
                 setButtonsEnabled(true);
                 var entries = data.entries;
                 if (!entries || entries.length === 0) {
@@ -572,6 +610,44 @@
             name: entry.name,
             type: entry.type
         });
+    }
+
+    function toggleProtection(tr, entry, path) {
+        var button = tr.querySelector('.fb-protect-btn');
+        if (!button || button.disabled) return;
+        var nextProtected = !entry.protected_exact;
+        var relPath = (path ? path + '/' : '') + entry.name;
+        button.disabled = true;
+
+        fetch('/api/protect', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({path: relPath, protected: nextProtected})
+        })
+            .then(function (r) {
+                return r.json().then(function (data) {
+                    return {ok:r.ok, data:data};
+                });
+            })
+            .then(function (res) {
+                if (!res.ok) {
+                    showMsg('保护状态修改失败: ' + (res.data.error || '未知错误'), true);
+                    button.disabled = false;
+                    return;
+                }
+                if (nextProtected) {
+                    showMsg('已保护: ' + entry.name, false);
+                } else if (res.data.protected) {
+                    showMsg('已取消独立保护，仍受「' + res.data.protection_source + '」保护', false);
+                } else {
+                    showMsg('已取消保护: ' + entry.name, false);
+                }
+                loadDir(currentPath);
+            })
+            .catch(function () {
+                showMsg('保护状态修改失败: 网络错误', true);
+                button.disabled = false;
+            });
     }
 
     function doMkdir() {

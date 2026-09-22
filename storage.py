@@ -20,7 +20,7 @@ COLUMNS = {
     'pages': {'title': 'TEXT', 'description': 'TEXT', 'pinned': 'INTEGER', 'created': 'INTEGER'},
 }
 BOOLS = {'done', 'pinned'}
-SCHEMA_VERSION = '4'
+SCHEMA_VERSION = '5'
 
 
 
@@ -81,6 +81,8 @@ def create_schema(db):
     db.execute('''CREATE TABLE IF NOT EXISTS weekly_default_people (
         seq INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE,
         name TEXT NOT NULL UNIQUE, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
+    db.execute('''CREATE TABLE IF NOT EXISTS protected_paths (
+        path TEXT PRIMARY KEY, created INTEGER NOT NULL, updated INTEGER NOT NULL)''')
 
 
 def check_schema(db):
@@ -157,6 +159,9 @@ def upgrade_schema(db, version):
         db.execute('DROP TABLE weekly_submissions_legacy')
         db.execute('CREATE INDEX weekly_submission_report ON weekly_submissions(report_id)')
         version = '4'
+        changed = True
+    if version == '4':
+        version = '5'
         changed = True
     if version != SCHEMA_VERSION:
         raise RuntimeError('数据库版本不兼容，请检查迁移状态')

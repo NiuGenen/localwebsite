@@ -285,7 +285,12 @@ class SQLiteTests(unittest.TestCase):
         try:
             self.assertNotIn('description', {row['name'] for row in db.execute('PRAGMA table_info(weekly_reports)')})
             self.assertIn('revision', {row['name'] for row in db.execute('PRAGMA table_info(weekly_submissions)')})
-            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '4')
+            self.assertEqual(db.execute("SELECT value FROM metadata WHERE key='schema_version'").fetchone()[0], '5')
+            self.assertIn('protected_paths', {
+                row['name'] for row in db.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            })
             self.assertEqual(db.execute('SELECT title FROM weekly_reports').fetchone()[0], '旧周报')
             self.assertEqual(db.execute('SELECT name FROM weekly_projects').fetchone()[0], '项目')
             self.assertEqual(db.execute('SELECT name FROM weekly_people').fetchone()[0], '张三')
@@ -715,6 +720,7 @@ class SQLiteTests(unittest.TestCase):
         self.assertEqual(len(self.records('todos')), 1)
 
     def test_file_list_includes_created_time(self):
+        self.init()
         upload = self.root / 'uploads'
         (upload / 'md').mkdir(parents=True)
         (upload / 'md' / 'reader.md').write_text('# Reader')
@@ -734,6 +740,7 @@ class SQLiteTests(unittest.TestCase):
         )
 
     def test_file_delete_moves_to_collision_safe_trash(self):
+        self.init()
         upload = self.root / 'uploads'
         trash = self.root / 'trash'
         (upload / 'docs').mkdir(parents=True)
@@ -783,6 +790,108 @@ class SQLiteTests(unittest.TestCase):
             }).status_code, 403)
             self.assertEqual(self.request('POST', '/api/delete', {'path': '../app.db'}).status_code, 400)
             self.assertEqual(self.request('POST', '/api/delete', {'path': 'missing.md'}).status_code, 404)
+        finally:
+            backend.UPLOAD_DIR = old_upload
+            backend.TRASH_DIR = old_trash
+
+    def test_dynamic_protection_blocks_remote_and_follows_local_changes(self):
+        self.init()
+        upload = self.root / 'uploads'
+        trash = self.root / 'trash'
+        (upload / 'folder' / 'sub').mkdir(parents=True)
+        (upload / 'dest').mkdir()
+        (upload / 'folder' / 'sub' / 'child.txt').write_text('child')
+        (upload / 'file.txt').write_text('file')
+
+        old_upload = backend.UPLOAD_DIR
+        old_trash = backend.TRASH_DIR
+        backend.UPLOAD_DIR = str(upload)
+        backend.TRASH_DIR = str(trash)
+        local = {'X-Real-IP': '127.0.0.1'}
+        remote = {'X-Real-IP': '192.0.2.1'}
+        try:
+            denied = self.request('POST', '/api/protect', {
+                'path': 'folder', 'protected': True
+            }, remote=True)
+            self.assertEqual(denied.status_code, 403)
+
+            protected = self.request('POST', '/api/protect', {
+                'path': 'folder', 'protected': True
+            })
+            self.assertEqual(protected.status_code, 200, protected.json)
+            self.assertTrue(protected.json['protected_exact'])
+
+            listing = self.request('GET', '/api/files?path=folder', remote=True)
+            self.assertFalse(listing.json['can_manage_protection'])
+            child = next(item for item in listing.json['entries'] if item['name'] == 'sub')
+            self.assertTrue(child['protected'])
+            self.assertFalse(child['protected_exact'])
+            self.assertEqual(child['protection_source'], 'folder')
+
+            self.assertEqual(self.request('POST', '/api/delete', {
+                'path': 'folder/sub/child.txt'
+            }, remote=True).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/rename', {
+                'path': 'folder/sub/child.txt', 'name': 'renamed.txt'
+            }, remote=True).status_code, 403)
+            self.assertEqual(self.request('POST', '/api/move', {
+                'src': 'folder/sub/child.txt', 'dst': 'dest'
+            }, remote=True).status_code, 403)
+            created = self.request('POST', '/api/mkdir', {
+                'parent': 'folder', 'name': 'allowed'
+            }, remote=True)
+            self.assertEqual(created.status_code, 200, created.json)
+            self.assertEqual(self.request('POST', '/api/rename', {
+                'path': 'folder', 'name': 'blocked-folder'
+            }, remote=True).status_code, 403)
+            with backend.app.test_client() as client:
+                uploaded = client.post('/api/upload', data={
+                    'path': 'folder', 'file': (io.BytesIO(b'x'), 'blocked.txt')
+                }, headers=remote, content_type='multipart/form-data')
+            self.assertEqual(uploaded.status_code, 200, uploaded.json)
+            self.assertTrue((upload / 'folder' / 'blocked.txt').exists())
+
+            renamed = self.request('POST', '/api/rename', {
+                'path': 'folder', 'name': 'renamed'
+            })
+            self.assertEqual(renamed.status_code, 200, renamed.json)
+            self.assertTrue((upload / 'renamed' / 'sub' / 'child.txt').exists())
+
+            unprotect_parent = self.request('POST', '/api/protect', {
+                'path': 'renamed', 'protected': False
+            })
+            self.assertFalse(unprotect_parent.json['protected'])
+            protect_child = self.request('POST', '/api/protect', {
+                'path': 'renamed/sub/child.txt', 'protected': True
+            })
+            self.assertTrue(protect_child.json['protected_exact'])
+            blocked_parent_rename = self.request('POST', '/api/rename', {
+                'path': 'renamed', 'name': 'still-blocked'
+            }, remote=True)
+            self.assertEqual(blocked_parent_rename.status_code, 403)
+
+            self.request('POST', '/api/protect', {
+                'path': 'renamed/sub/child.txt', 'protected': False
+            })
+            self.request('POST', '/api/protect', {'path': 'file.txt', 'protected': True})
+            moved = self.request('POST', '/api/move', {'src': 'file.txt', 'dst': 'dest'})
+            self.assertEqual(moved.status_code, 200, moved.json)
+            moved_listing = self.request('GET', '/api/files?path=dest', remote=True)
+            moved_file = next(item for item in moved_listing.json['entries'] if item['name'] == 'file.txt')
+            self.assertTrue(moved_file['protected_exact'])
+
+            deleted = self.request('POST', '/api/delete', {'path': 'dest/file.txt'})
+            self.assertEqual(deleted.status_code, 200, deleted.json)
+            db = storage.connect(self.database)
+            try:
+                self.assertIsNone(db.execute(
+                    "SELECT 1 FROM protected_paths WHERE path='dest/file.txt'"
+                ).fetchone())
+            finally:
+                db.close()
+
+            current = self.request('GET', '/api/files?path=renamed/sub', remote=True).json
+            self.assertFalse(current['protected'])
         finally:
             backend.UPLOAD_DIR = old_upload
             backend.TRASH_DIR = old_trash

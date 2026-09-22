@@ -127,6 +127,67 @@ def safe_join_soft(base, child):
     return norm
 
 
+def load_protected_paths():
+    return {row["path"] for row in get_db().execute("SELECT path FROM protected_paths")}
+
+
+def protection_state(rel_path, protected_paths=None):
+    rel_path = (rel_path or "").strip().strip("/")
+    paths = load_protected_paths() if protected_paths is None else protected_paths
+    source = None
+    if rel_path:
+        parts = rel_path.split("/")
+        for end in range(len(parts), 0, -1):
+            candidate = "/".join(parts[:end])
+            if candidate in paths:
+                source = candidate
+                break
+    contains_protected = bool(rel_path) and any(
+        path.startswith(rel_path + "/") for path in paths
+    )
+    return {
+        "protected": source is not None,
+        "protected_exact": rel_path in paths,
+        "protection_source": source,
+        "contains_protected": contains_protected,
+    }
+
+
+def protection_blocks_client(rel_path, include_descendants=False):
+    state = protection_state(rel_path)
+    blocked = state["protected"] or (include_descendants and state["contains_protected"])
+    return blocked and not is_local_client()
+
+
+def relocate_protection_paths(old_path, new_path):
+    db = get_db()
+    now = int(time.time())
+    rows = db.execute("SELECT path,created FROM protected_paths").fetchall()
+    for row in rows:
+        path = row["path"]
+        if path != old_path and not path.startswith(old_path + "/"):
+            continue
+        replacement = new_path + path[len(old_path):]
+        existing = db.execute(
+            "SELECT 1 FROM protected_paths WHERE path=?", (replacement,)
+        ).fetchone()
+        db.execute("DELETE FROM protected_paths WHERE path=?", (path,))
+        if not existing:
+            db.execute(
+                "INSERT INTO protected_paths(path,created,updated) VALUES(?,?,?)",
+                (replacement, row["created"], now),
+            )
+
+
+def remove_protection_paths(rel_path):
+    db = get_db()
+    rows = db.execute("SELECT path FROM protected_paths").fetchall()
+    for row in rows:
+        path = row["path"]
+        if path == rel_path or path.startswith(rel_path + "/"):
+            db.execute("DELETE FROM protected_paths WHERE path=?", (path,))
+
+
 def file_created_time(path, stat_result):
     """Return filesystem birth time when available, otherwise ctime."""
     birth_time = getattr(stat_result, "st_birthtime", None)
@@ -156,6 +217,8 @@ def api_list_files():
     if not os.path.isdir(target_dir):
         return jsonify({"error": "目录不存在"}), 400
 
+    protected_paths = load_protected_paths()
+
     try:
         names = sorted(os.listdir(target_dir))
     except OSError:
@@ -170,17 +233,32 @@ def api_list_files():
             st = os.stat(full)
             is_dir = os.path.isdir(full)
             entry_rel = path + "/" + name if path else name
+            protection = protection_state(entry_rel, protected_paths)
             entries.append({
                 "name": name,
                 "type": "dir" if is_dir else "file",
                 "size": st.st_size if not is_dir else 0,
                 "mtime": int(st.st_mtime),
                 "created": file_created_time(full, st),
-                "blocked": is_blocked(entry_rel)
+                "blocked": is_blocked(entry_rel),
+                "protected": protection["protected"],
+                "protected_exact": protection["protected_exact"],
+                "protection_source": protection["protection_source"],
+                "contains_protected": protection["contains_protected"],
             })
         except OSError:
             pass
-    return jsonify({"entries": entries, "path": path, "blocked": is_blocked(path)})
+    current_protection = protection_state(path, protected_paths)
+    return jsonify({
+        "entries": entries,
+        "path": path,
+        "blocked": is_blocked(path),
+        "protected": current_protection["protected"],
+        "protected_exact": current_protection["protected_exact"],
+        "protection_source": current_protection["protection_source"],
+        "contains_protected": current_protection["contains_protected"],
+        "can_manage_protection": is_local_client(),
+    })
 
 # ===== 文件夹打包下载 API =====
 
@@ -332,6 +410,7 @@ def api_mkdir():
 # ===== 移动文件 API =====
 
 @app.route("/api/move", methods=["POST"])
+@db_write
 def api_move():
     data = request.get_json()
     if not data:
@@ -352,6 +431,8 @@ def api_move():
     rel_src = os.path.relpath(src_path, UPLOAD_DIR)
     if is_blocked(rel_src):
         return jsonify({"error": "该目录不允许移动文件"}), 403
+    if protection_blocks_client(rel_src, include_descendants=True):
+        return jsonify({"error": "该文件或文件夹受保护，局域网用户不能剪切"}), 403
 
     dst_dir = UPLOAD_DIR if not dst else safe_join_soft(UPLOAD_DIR, dst)
     if not dst_dir:
@@ -362,6 +443,8 @@ def api_move():
     rel_dst = os.path.relpath(dst_dir, UPLOAD_DIR)
     if is_blocked(rel_dst):
         return jsonify({"error": "该目录不允许移动文件"}), 403
+    if protection_blocks_client(rel_dst):
+        return jsonify({"error": "目标文件夹受保护，局域网用户不能移入文件"}), 403
 
     dest_path = os.path.normpath(os.path.join(dst_dir, os.path.basename(src_path)))
     if os.path.lexists(dest_path):
@@ -370,6 +453,8 @@ def api_move():
     try:
         shutil.move(src_path, dest_path)
         to = "" if rel_dst == "." else rel_dst
+        new_rel = os.path.relpath(dest_path, UPLOAD_DIR)
+        relocate_protection_paths(rel_src, new_rel)
         return jsonify({"success": True, "name": os.path.basename(src_path), "to": to})
     except Exception as e:
         return jsonify({"error": f"移动失败: {e}"}), 500
@@ -377,6 +462,7 @@ def api_move():
 # ===== 重命名 API =====
 
 @app.route("/api/rename", methods=["POST"])
+@db_write
 def api_rename():
     data = request.get_json()
     if not data:
@@ -401,6 +487,8 @@ def api_rename():
     rel_src = os.path.relpath(src, UPLOAD_DIR)
     if is_blocked(rel_src):
         return jsonify({"error": "该目录不允许重命名"}), 403
+    if protection_blocks_client(rel_src, include_descendants=True):
+        return jsonify({"error": "该文件或文件夹受保护，局域网用户不能重命名"}), 403
     if os.path.basename(src) == "index.html":
         return jsonify({"error": "该文件不允许重命名"}), 403
 
@@ -414,6 +502,7 @@ def api_rename():
     try:
         os.rename(src, new_path)
         new_rel = os.path.relpath(new_path, UPLOAD_DIR)
+        relocate_protection_paths(rel_src, new_rel)
         return jsonify({"success": True, "old": path, "new": new_rel})
     except Exception as e:
         return jsonify({"error": f"重命名失败: {e}"}), 500
@@ -437,6 +526,7 @@ def trash_destination(rel_path, is_dir=False, timestamp=None):
 
 
 @app.route("/api/delete", methods=["POST"])
+@db_write
 def api_delete_entry():
     data = request.get_json(silent=True) or {}
     path = (data.get("path") or "").strip().strip("/")
@@ -455,6 +545,8 @@ def api_delete_entry():
     rel_src = os.path.relpath(src, UPLOAD_DIR)
     if is_blocked(rel_src):
         return jsonify({"error": "该目录不允许删除内容"}), 403
+    if protection_blocks_client(rel_src, include_descendants=True):
+        return jsonify({"error": "该文件或文件夹受保护，局域网用户不能删除"}), 403
     if not is_dir and os.path.basename(src) == "index.html":
         return jsonify({"error": "该文件不允许删除"}), 403
 
@@ -464,6 +556,7 @@ def api_delete_entry():
     try:
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         shutil.move(src, dest)
+        remove_protection_paths(rel_src)
         return jsonify({
             "success": True,
             "name": os.path.basename(src),
@@ -472,6 +565,46 @@ def api_delete_entry():
         })
     except Exception as e:
         return jsonify({"error": f"移入回收站失败: {e}"}), 500
+
+
+@app.route("/api/protect", methods=["POST"])
+@db_write
+def api_protect_entry():
+    if not require_local():
+        return jsonify({"error": "仅限本机访问"}), 403
+    data = request.get_json(silent=True) or {}
+    path = (data.get("path") or "").strip().strip("/")
+    enabled = data.get("protected")
+    if not path:
+        return jsonify({"error": "文件或文件夹路径不能为空"}), 400
+    if type(enabled) is not bool:
+        return jsonify({"error": "保护状态无效"}), 400
+
+    src = safe_join_soft(UPLOAD_DIR, path)
+    if not src or src == UPLOAD_DIR:
+        return jsonify({"error": "无效的文件路径"}), 400
+    if os.path.islink(src):
+        return jsonify({"error": "不能保护符号链接"}), 403
+    if not os.path.isfile(src) and not os.path.isdir(src):
+        return jsonify({"error": "文件或文件夹不存在"}), 404
+
+    rel_path = os.path.relpath(src, UPLOAD_DIR)
+    if is_blocked(rel_path):
+        return jsonify({"error": "系统保护目录不能修改保护状态"}), 403
+    if os.path.isfile(src) and os.path.basename(src) == "index.html":
+        return jsonify({"error": "该文件不允许修改保护状态"}), 403
+
+    now = int(time.time())
+    if enabled:
+        get_db().execute(
+            "INSERT INTO protected_paths(path,created,updated) VALUES(?,?,?) "
+            "ON CONFLICT(path) DO UPDATE SET updated=excluded.updated",
+            (rel_path, now, now),
+        )
+    else:
+        get_db().execute("DELETE FROM protected_paths WHERE path=?", (rel_path,))
+    state = protection_state(rel_path)
+    return jsonify({"success": True, "path": rel_path, **state})
 
 # ===== 本机判定 API =====
 
